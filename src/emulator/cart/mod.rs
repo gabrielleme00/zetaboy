@@ -21,7 +21,6 @@ struct Header {
     lic_code: u8,
     version: u8,
     checksum: u8,
-    global_checksum: u16,
 }
 
 impl Header {
@@ -39,7 +38,6 @@ impl Header {
             lic_code: rom[0x14B],
             version: rom[0x14C],
             checksum: rom[0x14D],
-            global_checksum: ((rom[0x14E] as u16) << 8) | rom[0x14F] as u16,
         }
     }
 
@@ -57,7 +55,6 @@ impl Header {
             lic_code: 0,
             version: 0,
             checksum: 0,
-            global_checksum: 0,
         }
     }
 
@@ -97,17 +94,6 @@ impl Header {
             _ => format!("UNKNOWN ({})", self.ram_size)
         }
     }
-
-    pub fn print(&self) {
-        println!("#------ ROM INFO ------#");
-        println!("| Title    : {}", self.title_to_string());
-        println!("| Type     : {}", self.cart_type_to_string());
-        println!("| ROM Size : {}", self.rom_size_to_string());
-        println!("| RAM Size : {}", self.ram_size_to_string());
-        println!("| Licensee : {}", self.lic_to_string());
-        println!("| Version  : {:?}", self.version);
-        println!("#----------------------#");
-    }
 }
 
 pub struct Cart {
@@ -133,6 +119,31 @@ impl Cart {
 
     pub fn read_header(&mut self) {
         self.header = Header::new(&self.rom_data);
-        self.header.print();
+        self.print_info();
+    }
+
+    pub fn print_info(&self) {
+        let checksum = match self.is_checksum_valid() {
+            true => "VALID",
+            false => "INVALID"
+        };
+
+        println!("#------ ROM INFO ------#");
+        println!("| Title    : {}", self.header.title_to_string());
+        println!("| Type     : {}", self.header.cart_type_to_string());
+        println!("| ROM Size : {}", self.header.rom_size_to_string());
+        println!("| RAM Size : {}", self.header.ram_size_to_string());
+        println!("| Licensee : {}", self.header.lic_to_string());
+        println!("| Version  : {}", self.header.version);
+        println!("| Checksum : {}", checksum);
+        println!("#----------------------#");
+    }
+
+    fn is_checksum_valid(&self) -> bool {
+        let mut x: u8 = 0;
+        for i in 0x134..=0x14C {
+            x = x.wrapping_sub(self.rom_data[i]).wrapping_sub(1);
+        }
+        x == self.header.checksum
     }
 }
