@@ -64,11 +64,10 @@ impl Header {
     }
 
     fn lic_to_string(&self) -> &'static str {
-        let code = self.new_lic_code;
-        if code <= 0xA4 {
-            return licensee::name(code);
+        match self.lic_code {
+            0x33 => licensee::new_name(self.new_lic_code),
+            _ => licensee::old_name(self.lic_code),
         }
-        "UNKKOWN"
     }
 
     fn cart_type_to_string(&self) -> &'static str {
@@ -124,8 +123,8 @@ impl Cart {
 
     pub fn print_info(&self) {
         let checksum = match self.is_checksum_valid() {
-            true => "VALID",
-            false => "INVALID"
+            true => format!("{:#04X} (PASSED)", self.header.checksum),
+            false => format!("{:#04X} (FAILED)", self.header.checksum)
         };
 
         println!("#------ ROM INFO ------#");
