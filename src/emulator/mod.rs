@@ -1,5 +1,7 @@
+mod cart;
 mod cpu;
 
+use cart::Cart;
 use cpu::CPU;
 use piston_window::*;
 use std::error::Error;
@@ -15,6 +17,7 @@ pub struct Emulator {
     pub running: bool,
     ticks: u64,
     cpu: CPU,
+    cart: Cart,
 }
 
 impl Emulator {
@@ -32,7 +35,16 @@ impl Emulator {
             running: true,
             ticks: 0,
             cpu: CPU::new(),
+            cart: Cart::new(),
         }
+    }
+
+    pub fn load_rom(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+        println!("Loading ROM '{}'...", filename);
+        self.cart.load(filename)?;
+        self.cart.read_header();
+        println!("ROM loaded successfully!");
+        Ok(())
     }
 
     pub fn render(&mut self, e: &Event) {

@@ -8,6 +8,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     println!("Starting Game Boy emulator...");
 
     let mut emu = Emulator::new();
+    emu.load_rom("roms/tetris.gb")?;
 
     while let Some(e) = emu.window.next() {
         if let Some(_) = e.render_args() {
