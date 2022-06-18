@@ -71,11 +71,7 @@ impl Header {
     }
 
     fn cart_type_to_string(&self) -> &'static str {
-        let code = self.cart_type;
-        if code <= 0x22 {
-            return cart_type::name(code);
-        }
-        "UNKKOWN"
+        return cart_type::name(self.cart_type)
     }
 
     fn rom_size_to_string(&self) -> String {
