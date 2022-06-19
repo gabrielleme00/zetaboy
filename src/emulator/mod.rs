@@ -17,11 +17,11 @@ pub struct Emulator {
     pub running: bool,
     ticks: u64,
     cpu: CPU,
-    cart: Cart,
+    _cart: Cart,
 }
 
 impl Emulator {
-    pub fn new() -> Self {
+    pub fn new(filename: &str) -> Result<Self, Box<dyn Error>> {
         let mut window: PistonWindow = WindowSettings::new(WINDOW_TITLE, WINDOW_SIZE)
             .exit_on_esc(true)
             .resizable(false)
@@ -29,22 +29,17 @@ impl Emulator {
             .unwrap();
         window.set_ups(60);
 
-        Emulator {
+        let cart =  Cart::new(filename)?;
+        cart.print_info();
+
+        Ok(Emulator {
             window,
             paused: false,
             running: true,
             ticks: 0,
             cpu: CPU::new(),
-            cart: Cart::new(),
-        }
-    }
-
-    pub fn load_rom(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
-        println!("Loading ROM '{}'...", filename);
-        self.cart.load(filename)?;
-        self.cart.read_header();
-        println!("ROM loaded successfully!");
-        Ok(())
+            _cart: cart,
+        })
     }
 
     pub fn render(&mut self, e: &Event) {
