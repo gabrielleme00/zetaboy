@@ -15,16 +15,14 @@ pub struct Registers {
     pub f: FlagsRegister,
     pub h: u8,
     pub l: u8,
-    pub sp: u16, // Stack Pointer
-    pub pc: u16, // Program Counter
 }
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct FlagsRegister {
-    pub zero: bool,
-    pub sub: bool,
-    pub half_carry: bool,
-    pub carry: bool,
+    pub z: bool, // Zero
+    pub n: bool, // Subtract
+    pub h: bool, // Half carry
+    pub c: bool, // Carry
 }
 
 impl Registers {
@@ -38,27 +36,52 @@ impl Registers {
             f: Default::default(),
             h: 0,
             l: 0,
-            sp: 0,
-            pc: 0,
         }
     }
 
-    fn get_bc(&self) -> u16 {
+    pub fn get_af(&self) -> u16 {
+        (self.a as u16) << 8 | (u8::from(self.f) as u16)
+    }
+
+    pub fn get_bc(&self) -> u16 {
         (self.b as u16) << 8 | (self.c as u16)
     }
 
-    fn set_bc(&mut self, value: u16) {
-        self.b = ((value & 0xFF00) >> 8) as u8;
+    pub fn get_de(&self) -> u16 {
+        (self.d as u16) << 8 | (self.e as u16)
+    }
+
+    pub fn get_hl(&self) -> u16 {
+        (self.h as u16) << 8 | (self.l as u16)
+    }
+
+    pub fn set_af(&mut self, value: u16) {
+        self.a = (value >> 8) as u8;
+        self.f = FlagsRegister::from((value & 0xFF) as u8);
+    }
+
+    pub fn set_bc(&mut self, value: u16) {
+        self.b = (value >> 8) as u8;
         self.c = (value & 0xFF) as u8;
+    }
+
+    pub fn set_de(&mut self, value: u16) {
+        self.d = (value >> 8) as u8;
+        self.e = (value & 0xFF) as u8;
+    }
+
+    pub fn set_hl(&mut self, value: u16) {
+        self.h = (value >> 8) as u8;
+        self.l = (value & 0xFF) as u8;
     }
 }
 
 impl convert::From<FlagsRegister> for u8 {
     fn from(flag: FlagsRegister) -> Self {
-        (if flag.zero { 1 } else { 0 }) << ZERO_FLAG_POS
-            | (if flag.sub { 1 } else { 0 }) << SUB_FLAG_POS
-            | (if flag.half_carry { 1 } else { 0 }) << HALF_CARRY_FLAG_POS
-            | (if flag.carry { 1 } else { 0 }) << CARRY_FLAG_POS
+        (if flag.z { 1 } else { 0 }) << ZERO_FLAG_POS
+            | (if flag.n { 1 } else { 0 }) << SUB_FLAG_POS
+            | (if flag.h { 1 } else { 0 }) << HALF_CARRY_FLAG_POS
+            | (if flag.c { 1 } else { 0 }) << CARRY_FLAG_POS
     }
 }
 
@@ -70,10 +93,10 @@ impl std::convert::From<u8> for FlagsRegister {
         let carry = ((byte >> CARRY_FLAG_POS) & 0b1) != 0;
 
         FlagsRegister {
-            zero,
-            sub,
-            half_carry,
-            carry
+            z: zero,
+            n: sub,
+            h: half_carry,
+            c: carry
         }
     }
 }
