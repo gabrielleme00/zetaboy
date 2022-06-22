@@ -2,7 +2,7 @@ mod bus;
 mod instructions;
 mod registers;
 
-use std::num::NonZeroU16;
+use core::panic;
 
 use bus::*;
 use instructions::{ArithmeticTarget as AT, *};
@@ -18,10 +18,10 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(cart_data: &Vec<u8>) -> Self {
         Self {
             reg: Registers::new(),
-            bus: MemoryBus::new(),
+            bus: MemoryBus::new(cart_data),
             pc: 0x100,
             sp: 0,
             halted: false,
@@ -41,9 +41,11 @@ impl CPU {
             opcode = self.read_next_byte();
         }
         let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
+            let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
+            println!("Executing: {}", description);
             self.execute(instruction)
         } else {
-            let description = format!("0x{}{:X}", if prefixed { "cb" } else { "" }, opcode);
+            let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
             println!("Unknown instruction found for: {}", description);
             return Err("Unknown instruction");
         };
@@ -65,6 +67,11 @@ impl CPU {
         self.bus.read_word(self.pc + 1)
     }
 
+    /// Returns the byte pointed by the `HL` register
+    fn read_byte_hl(&self) -> u8 {
+        self.bus.read_byte(self.reg.get_hl())
+    }
+
     /// Evaluates the jump condition and returns a boolean result.
     fn test_jump_condition(&self, test: JumpTest) -> bool {
         match test {
@@ -84,10 +91,14 @@ impl CPU {
             NOP => self.pc.wrapping_add(1),
             HALT => self.pc,
             ADD(target) => match target {
-                AT::C => {
-                    self.reg.a = self.add(self.reg.c);
-                    self.pc.wrapping_add(1)
-                }
+                AT::A => self.add(self.reg.a),
+                AT::B => self.add(self.reg.b),
+                AT::C => self.add(self.reg.c),
+                AT::D => self.add(self.reg.d),
+                AT::E => self.add(self.reg.e),
+                AT::H => self.add(self.reg.h),
+                AT::L => self.add(self.reg.l),
+                AT::HLI => self.add(self.read_byte_hl()),
                 _ => self.pc, /* TODO: support more targets */
             },
             JP(test) => self.jump(self.test_jump_condition(test)),
@@ -103,7 +114,7 @@ impl CPU {
                         LoadByteSource::H => self.reg.h,
                         LoadByteSource::L => self.reg.l,
                         LoadByteSource::D8 => self.read_next_byte(),
-                        LoadByteSource::HLI => self.bus.read_byte(self.reg.get_hl()),
+                        LoadByteSource::HLI => self.read_byte_hl(),
                     };
                     match target {
                         LoadByteTarget::A => self.reg.a = source_value,
@@ -119,6 +130,41 @@ impl CPU {
                         LoadByteSource::D8 => self.pc.wrapping_add(2),
                         _ => self.pc.wrapping_add(2),
                     }
+                }
+                LoadType::Word(target, source) => {
+                    let source_value = match source {
+                        LoadWordSource::D16 => self.read_next_word(),
+                        _ => panic!("LoadWordSource not implemented"),
+                    };
+                    match target {
+                        LoadWordTarget::HL => self.reg.set_hl(source_value),
+                        _ => panic!("LoadWordTarget not implemented"),
+                    };
+                    match source {
+                        LoadWordSource::D16 => self.pc.wrapping_add(3),
+                        _ => panic!("LoadWord length not implemented"),
+                    }
+                }
+                LoadType::IndirectFromA(target) => {
+                    match target {
+                        LoadIndirectTarget::BC => {
+                            self.bus.write_byte(self.reg.get_bc(), self.reg.a)
+                        }
+                        LoadIndirectTarget::DE => {
+                            self.bus.write_byte(self.reg.get_de(), self.reg.a)
+                        }
+                        LoadIndirectTarget::HLP => {
+                            let hl = self.reg.get_hl();
+                            self.bus.write_byte(hl, self.reg.a);
+                            self.reg.set_hl(hl.wrapping_add(1));
+                        }
+                        LoadIndirectTarget::HLM => {
+                            let hl = self.reg.get_hl();
+                            self.bus.write_byte(hl, self.reg.a);
+                            self.reg.set_hl(hl.wrapping_sub(1));
+                        }
+                    }
+                    self.pc.wrapping_add(1)
                 }
             },
             PUSH(target) => {
@@ -148,6 +194,17 @@ impl CPU {
                 let jump_condition = self.test_jump_condition(test);
                 self.return_(jump_condition)
             }
+            XOR(target) => match target {
+                AT::A => self.xor(self.reg.a),
+                AT::B => self.xor(self.reg.b),
+                AT::C => self.xor(self.reg.c),
+                AT::D => self.xor(self.reg.d),
+                AT::E => self.xor(self.reg.e),
+                AT::H => self.xor(self.reg.h),
+                AT::L => self.xor(self.reg.l),
+                AT::HLI => self.xor(self.read_byte_hl()),
+                AT::D8 => self.xor(self.read_next_byte()),
+            },
             _ => self.pc, /* TODO: support more instructions */
         }
     }
@@ -206,15 +263,27 @@ impl CPU {
         (msb << 8) | lsb
     }
 
-    // ALU operations
+    // 8-bit Arithmetic Logic Unit
 
     /// Adds `value` to the A register (accumulator).
-    fn add(&mut self, value: u8) -> u8 {
+    fn add(&mut self, value: u8) -> u16 {
         let (new_value, overflow) = self.reg.a.overflowing_add(value);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = (self.reg.a & 0xF) + (value & 0xF) > 0xF;
         self.reg.f.c = overflow;
-        new_value
+        self.reg.a = new_value;
+        self.pc.wrapping_add(1)
+    }
+
+    /// XORs `value` to the A register (accumulator).
+    fn xor(&mut self, value: u8) -> u16 {
+        let new_value = self.reg.a ^ value;
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = false;
+        self.reg.a = new_value;
+        self.pc.wrapping_add(1)
     }
 }
