@@ -5,8 +5,12 @@ pub struct MemoryBus {
 }
 
 impl MemoryBus {
-    pub fn new() -> Self {
-        Self { memory: [0; MEMORY_SIZE] }
+    pub fn new(cart_data: &Vec<u8>) -> Self {
+        let mut memory = [0; MEMORY_SIZE];
+        for i in 0..cart_data.len() {
+            memory[i] = cart_data[i];
+        }
+        Self { memory }
     }
 
     /// Reads a byte from the `address`.
@@ -16,7 +20,7 @@ impl MemoryBus {
 
     /// Reads 2 bytes from the `address`.
     pub fn read_word(&self, address: u16) -> u16 {
-        let a = (self.read_byte(address) << 8) as u16;
+        let a = (self.read_byte(address) as u16) << 8;
         let b = self.read_byte(address + 1) as u16;
         (a << 8) | b
     }
