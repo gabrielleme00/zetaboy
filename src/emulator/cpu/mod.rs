@@ -42,11 +42,14 @@ impl CPU {
         }
         let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
             let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-            println!("Executing: {}", description);
+            println!("Executing: [{:#04X}] -> {}", self.pc, description);
             self.execute(instruction)
         } else {
             let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-            println!("Unknown instruction found for: {}", description);
+            println!(
+                "Unknown instruction found for: [{:#04X}] -> {}",
+                self.pc, description
+            );
             return Err("Unknown instruction");
         };
 
@@ -101,8 +104,32 @@ impl CPU {
                 AT::HLI => self.add(self.read_byte_hl()),
                 _ => self.pc, /* TODO: support more targets */
             },
-            JP(test) => self.jump(self.test_jump_condition(test)),
+            DEC(target) => {
+                match target {
+                    AT::A => self.reg.a = self.dec(self.reg.a),
+                    AT::B => self.reg.b = self.dec(self.reg.b),
+                    AT::C => self.reg.c = self.dec(self.reg.c),
+                    AT::D => self.reg.d = self.dec(self.reg.d),
+                    AT::E => self.reg.e = self.dec(self.reg.e),
+                    AT::H => self.reg.h = self.dec(self.reg.h),
+                    AT::L => self.reg.l = self.dec(self.reg.l),
+                    AT::HLI => {
+                        let addr = self.reg.get_hl();
+                        let new_value = self.dec(self.bus.read_byte(addr));
+                        self.bus.write_byte(addr, new_value);
+                    }
+                    AT::BC => self.reg.set_bc(self.reg.get_bc().wrapping_sub(1)),
+                    AT::DE => self.reg.set_de(self.reg.get_de().wrapping_sub(1)),
+                    AT::HL => self.reg.set_hl(self.reg.get_hl().wrapping_sub(1)),
+                    AT::SP => self.sp = self.sp.wrapping_sub(1),
+                    _ => {} /* TODO: update DEC targets */
+                }
+                self.pc.wrapping_add(1)
+            }
+            JP(test) => self.jump(test),
             JPHL => self.reg.get_hl(),
+            JR => self.jr(),
+            JRIF(condition) => self.jr_if(condition),
             LD(load_type) => match load_type {
                 LoadType::Byte(target, source) => {
                     let source_value = match source {
@@ -186,14 +213,8 @@ impl CPU {
                 }
                 self.pc.wrapping_add(1)
             }
-            CALL(test) => {
-                let jump_condition = self.test_jump_condition(test);
-                self.call(jump_condition)
-            }
-            RET(test) => {
-                let jump_condition = self.test_jump_condition(test);
-                self.return_(jump_condition)
-            }
+            CALL(test) => self.call(test),
+            RET(test) => self.ret(test),
             XOR(target) => match target {
                 AT::A => self.xor(self.reg.a),
                 AT::B => self.xor(self.reg.b),
@@ -204,6 +225,9 @@ impl CPU {
                 AT::L => self.xor(self.reg.l),
                 AT::HLI => self.xor(self.read_byte_hl()),
                 AT::D8 => self.xor(self.read_next_byte()),
+                _ => {
+                    0 /* TODO: update XOR targets */
+                }
             },
             _ => self.pc, /* TODO: support more instructions */
         }
@@ -211,8 +235,9 @@ impl CPU {
 
     // Branch operations
 
-    fn jump(&self, should_jump: bool) -> u16 {
-        if should_jump {
+    /// Jumps to the address given by the next 2 bytes if the condition is met.
+    fn jump(&self, test: JumpTest) -> u16 {
+        if self.test_jump_condition(test) {
             // Game Boy is little endian so read pc + 2 as most significant byte
             // and pc + 1 as least significant byte
             let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
@@ -224,9 +249,9 @@ impl CPU {
         }
     }
 
-    fn call(&mut self, should_jump: bool) -> u16 {
+    fn call(&mut self, test: JumpTest) -> u16 {
         let next_pc = self.pc.wrapping_add(3);
-        if should_jump {
+        if self.test_jump_condition(test) {
             self.push(next_pc);
             self.read_next_word()
         } else {
@@ -234,11 +259,31 @@ impl CPU {
         }
     }
 
-    fn return_(&mut self, should_jump: bool) -> u16 {
-        if should_jump {
+    fn ret(&mut self, test: JumpTest) -> u16 {
+        if self.test_jump_condition(test) {
             self.pop()
         } else {
             self.pc.wrapping_add(1)
+        }
+    }
+
+    /// Adds the immediate next byte value to the current address and jumps
+    /// to it.
+    fn jr(&mut self) -> u16 {
+        ((self.pc as i32) + (self.read_next_byte() as i32)) as u16
+    }
+
+    /// Executes JR if a flag condition is met.
+    fn jr_if(&mut self, condition: FlagCondition) -> u16 {
+        if match condition {
+            FlagCondition::C => self.reg.f.c,
+            FlagCondition::Z => self.reg.f.z,
+            FlagCondition::NC => !self.reg.f.c,
+            FlagCondition::NZ => !self.reg.f.z,
+        } {
+            self.jr()
+        } else {
+            self.pc.wrapping_add(2)
         }
     }
 
@@ -285,5 +330,14 @@ impl CPU {
         self.reg.f.c = false;
         self.reg.a = new_value;
         self.pc.wrapping_add(1)
+    }
+
+    /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
+    fn dec(&mut self, value: u8) -> u8 {
+        let new_value = value.wrapping_sub(1);
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = true;
+        self.reg.f.h = value.trailing_zeros() >= 4;
+        new_value
     }
 }

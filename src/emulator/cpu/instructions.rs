@@ -9,12 +9,14 @@ pub enum Instruction {
     // CCF,
     // CP,
     // CPL,
-    // DEC,
+    DEC(ArithmeticTarget),
     // DI,
     HALT,
     // INC(ArithmeticTarget),
     JP(JumpTest),
     JPHL,
+    JR,
+    JRIF(FlagCondition),
     LD(LoadType),
     NOP,
     // OR,
@@ -43,6 +45,13 @@ pub enum Instruction {
     XOR(ArithmeticTarget),
 }
 
+pub enum FlagCondition {
+    NZ,
+    NC,
+    Z,
+    C,
+}
+
 pub enum JumpTest {
     Always,
     Zero,
@@ -59,10 +68,11 @@ pub enum ArithmeticTarget {
     E,
     H,
     L,
-    // BC,
-    // DE,
+    BC,
+    DE,
+    HL,
     HLI,
-    // SP,
+    SP,
     D8,
 }
 
@@ -149,41 +159,58 @@ impl Instruction {
             0x02 => Some(LD(LT::IndirectFromA(LIT::BC))),
             // 0x03 => Some(INC(ArithmeticTarget::BC)),
             // 0x04 => Some(INC(ArithmeticTarget::B)),
+            0x05 => Some(DEC(ArithmeticTarget::B)),
             0x06 => Some(LD(LT::Byte(LBT::B, LBS::D8))),
             0x08 => Some(LD(LT::Word(LWT::D16I, LWS::SP))),
             // 0x09 => Some(ADDHL(ArithmeticTarget::BC)),
 
+            0x0B => Some(DEC(ArithmeticTarget::BC)),
             // 0x0C => Some(INC(ArithmeticTarget::C)),
+            0x0D => Some(DEC(ArithmeticTarget::C)),
             0x0E => Some(LD(LT::Byte(LBT::C, LBS::D8))),
 
             0x11 => Some(LD(LT::Word(LWT::DE, LWS::D16))),
             0x12 => Some(LD(LT::IndirectFromA(LIT::DE))),
             // 0x13 => Some(INC(ArithmeticTarget::DE)),
             // 0x14 => Some(INC(ArithmeticTarget::D)),
+            0x15 => Some(DEC(ArithmeticTarget::D)),
             0x16 => Some(LD(LT::Byte(LBT::D, LBS::D8))),
+            0x18 => Some(JR),
             // 0x19 => Some(ADDHL(ArithmeticTarget::DE)),
 
+            0x1B => Some(DEC(ArithmeticTarget::DE)),
             // 0x1C => Some(INC(ArithmeticTarget::E)),
+            0x1D => Some(DEC(ArithmeticTarget::E)),
             0x1E => Some(LD(LT::Byte(LBT::E, LBS::D8))),
 
+            0x20 => Some(JRIF(FlagCondition::NZ)),
             0x21 => Some(LD(LT::Word(LWT::HL, LWS::D16))),
             0x22 => Some(LD(LT::IndirectFromA(LIT::HLP))),
             // 0x23 => Some(INC(ArithmeticTarget::HL)),
             // 0x24 => Some(INC(ArithmeticTarget::H)),
+            0x25 => Some(DEC(ArithmeticTarget::H)),
             0x26 => Some(LD(LT::Byte(LBT::H, LBS::D8))),
+            0x28 => Some(JRIF(FlagCondition::Z)),
             // 0x29 => Some(ADDHL(ArithmeticTarget::HL)),
 
+            0x2B => Some(DEC(ArithmeticTarget::HL)),
             // 0x2C => Some(INC(ArithmeticTarget::L)),
+            0x2D => Some(DEC(ArithmeticTarget::L)),
             0x2E => Some(LD(LT::Byte(LBT::L, LBS::D8))),
 
+            0x30 => Some(JRIF(FlagCondition::NC)),
             0x31 => Some(LD(LT::Word(LWT::SP, LWS::D16))),
             0x32 => Some(LD(LT::IndirectFromA(LIT::HLM))),
             // 0x33 => Some(INC(ArithmeticTarget::SP)),
             // 0x34 => Some(INC(ArithmeticTarget::HL)),
+            0x35 => Some(DEC(ArithmeticTarget::HLI)),
             0x36 => Some(LD(LT::Byte(LBT::HLI, LBS::D8))),
+            0x38 => Some(JRIF(FlagCondition::C)),
             // 0x39 => Some(ADDHL(ArithmeticTarget::SP)),
 
+            0x3B => Some(DEC(ArithmeticTarget::SP)),
             // 0x3C => Some(INC(ArithmeticTarget::A)),
+            0x3D => Some(DEC(ArithmeticTarget::A)),
             0x3E => Some(LD(LT::Byte(LBT::A, LBS::D8))),
 
             0x40 => Some(LD(LT::Byte(LBT::B, LBS::B))),
