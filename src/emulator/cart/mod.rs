@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 pub struct Cart {
-    rom_data: Vec<u8>,
+    pub rom_data: Vec<u8>,
     header: Header,
 }
 

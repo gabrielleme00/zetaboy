@@ -37,7 +37,7 @@ impl Emulator {
             paused: false,
             running: true,
             ticks: 0,
-            cpu: CPU::new(),
+            cpu: CPU::new(&cart.rom_data),
             _cart: cart,
         })
     }
