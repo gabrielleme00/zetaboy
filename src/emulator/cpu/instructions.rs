@@ -103,7 +103,7 @@ pub enum LoadWordTarget {
     DE,
     HL,
     SP,
-    D16I
+    D16I,
 }
 
 pub enum LoadWordSource {
@@ -136,12 +136,12 @@ impl Instruction {
 
     pub fn from_byte_not_prefixed(byte: u8) -> Option<Self> {
         use Instruction::*;
-        use LoadType as LT;
-        use LoadByteTarget as LBT;
         use LoadByteSource as LBS;
-        use LoadWordTarget as LWT;
-        use LoadWordSource as LWS;
+        use LoadByteTarget as LBT;
         use LoadIndirectTarget as LIT;
+        use LoadType as LT;
+        use LoadWordSource as LWS;
+        use LoadWordTarget as LWT;
 
         match byte {
             0x00 => Some(NOP),

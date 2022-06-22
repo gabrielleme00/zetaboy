@@ -96,7 +96,7 @@ impl std::convert::From<u8> for FlagsRegister {
             z: zero,
             n: sub,
             h: half_carry,
-            c: carry
+            c: carry,
         }
     }
 }

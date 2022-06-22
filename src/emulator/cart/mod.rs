@@ -1,9 +1,7 @@
-mod licensee;
 mod cart_type;
+mod licensee;
 
-use std::error::Error;
-use std::fs;
-use std::path::Path;
+use std::{error::Error, fs, path::Path};
 
 pub struct Cart {
     pub rom_data: Vec<u8>,
@@ -29,16 +27,13 @@ impl Cart {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let rom_data = fs::read(path)?;
         let header = Header::new(&rom_data);
-        Ok(Self {
-            rom_data,
-            header,
-        })
+        Ok(Self { rom_data, header })
     }
 
     pub fn print_info(&self) {
         let checksum = match self.is_checksum_valid() {
             true => format!("{:#04X} (PASSED)", self.header.checksum),
-            false => format!("{:#04X} (FAILED)", self.header.checksum)
+            false => format!("{:#04X} (FAILED)", self.header.checksum),
         };
 
         println!("#------ ROM INFO ------#");
@@ -92,7 +87,7 @@ impl Header {
     }
 
     fn cart_type_to_string(&self) -> &'static str {
-        return cart_type::name(self.cart_type)
+        cart_type::name(self.cart_type)
     }
 
     fn rom_size_to_string(&self) -> String {
@@ -107,7 +102,7 @@ impl Header {
             3 => format!("32 kB (4 banks of 8 kB each)"),
             4 => format!("128 kB (16 banks of 8 kB each)"),
             5 => format!("64 kB (8 banks of 8 kB each)"),
-            _ => format!("UNKNOWN ({})", self.ram_size)
+            _ => format!("UNKNOWN ({})", self.ram_size),
         }
     }
 }
