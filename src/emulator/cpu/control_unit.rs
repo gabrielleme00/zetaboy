@@ -1,10 +1,9 @@
-use super::CPU;
 use super::instructions::*;
+use super::CPU;
 
 /// Executes a given `instruction`
 pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     use Instruction::*;
-
     match instruction {
         ADD(target) => add(cpu, target),
         CALL(test) => cpu.alu_call(test),
