@@ -1,7 +1,7 @@
 mod bus;
+mod control_unit;
 mod instructions;
 mod registers;
-mod control_unit;
 
 use core::panic;
 
@@ -89,6 +89,52 @@ impl CPU {
 
     // --- ALU ---
     // TODO: create a separate module for the ALU
+
+    // x8/rsb
+
+    /// Rotates A to the left. Old bit 7 is copied to Carry flag.
+    fn alu_rlc(&mut self, value: u8) -> u8 {
+        let old_bit_0 = (value & 0x80) >> 7;
+        let new_value = (value << 1) | old_bit_0;
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
+
+    /// Rotates A to the left through Carry flag.
+    fn alu_rl(&mut self, value: u8) -> u8 {
+        let old_bit_0 = (value & 0x80) >> 7;
+        let new_value = (value << 1) | (self.reg.f.c as u8);
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
+
+    /// Rotates A to the right. Old bit 0 is copied to Carry flag.
+    fn alu_rrc(&mut self, value: u8) -> u8 {
+        let old_bit_0 = value & 1;
+        let new_value = (value >> 1) | (old_bit_0 << 7);
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
+
+    /// Rotates A to the right through Carry flag.
+    fn alu_rr(&mut self, value: u8) -> u8 {
+        let old_bit_0 = value & 1;
+        let new_value = (value >> 1) | ((self.reg.f.c as u8) << 7);
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
 
     // Branch operations
 

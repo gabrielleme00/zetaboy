@@ -18,9 +18,37 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         POP(target) => pop(cpu, target),
         PUSH(target) => push(cpu, target),
         RET(test) => cpu.alu_ret(test),
+        RLCA => rlca(cpu),
+        RLA => rla(cpu),
+        RRCA => rrca(cpu),
+        RRA => rra(cpu),
         XOR(target) => xor(cpu, target),
         _ => cpu.pc, /* TODO: support more instructions */
     }
+}
+
+fn rlca(cpu: &mut CPU) -> u16 {
+    cpu.reg.a = cpu.alu_rlc(cpu.reg.a);
+    cpu.reg.f.z = false;
+    cpu.pc.wrapping_add(1)
+}
+
+fn rla(cpu: &mut CPU) -> u16 {
+    cpu.reg.a = cpu.alu_rl(cpu.reg.a);
+    cpu.reg.f.z = false;
+    cpu.pc.wrapping_add(1)
+}
+
+fn rrca(cpu: &mut CPU) -> u16 {
+    cpu.reg.a = cpu.alu_rrc(cpu.reg.a);
+    cpu.reg.f.z = false;
+    cpu.pc.wrapping_add(1)
+}
+
+fn rra(cpu: &mut CPU) -> u16 {
+    cpu.reg.a = cpu.alu_rr(cpu.reg.a);
+    cpu.reg.f.z = false;
+    cpu.pc.wrapping_add(1)
 }
 
 fn add(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
