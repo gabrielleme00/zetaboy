@@ -44,7 +44,7 @@ impl CPU {
         let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
             let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
             println!("Executing: [{:#04X}] -> {}", self.pc, description);
-            self.execute(instruction)
+            control_unit::execute(self, instruction)
         } else {
             let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
             println!(
@@ -87,30 +87,8 @@ impl CPU {
         }
     }
 
-    /// Executes a given `instruction`
-    fn execute(&mut self, instruction: Instruction) -> u16 {
-        use Instruction::*;
-
-        match instruction {
-            ADD(target) => control_unit::add(self, target),
-            CALL(test) => self.alu_call(test),
-            DEC(target) => control_unit::dec(self, target),
-            HALT => self.pc,
-            JP(test) => self.alu_jump(test),
-            JPHL => self.reg.get_hl(),
-            JR => self.alu_jr(),
-            JRIF(condition) => self.alu_jr_if(condition),
-            LD(load_type) => self.alu_ld(load_type),
-            NOP => self.pc.wrapping_add(1),
-            POP(target) => control_unit::pop(self, target),
-            PUSH(target) => control_unit::push(self, target),
-            RET(test) => self.alu_ret(test),
-            XOR(target) => control_unit::xor(self, target),
-            _ => self.pc, /* TODO: support more instructions */
-        }
-    }
-
     // --- ALU ---
+    // TODO: create a separate module for the ALU
 
     // Branch operations
 

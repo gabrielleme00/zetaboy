@@ -1,7 +1,30 @@
 use super::CPU;
 use super::instructions::*;
 
-pub fn add(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
+/// Executes a given `instruction`
+pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
+    use Instruction::*;
+
+    match instruction {
+        ADD(target) => add(cpu, target),
+        CALL(test) => cpu.alu_call(test),
+        DEC(target) => dec(cpu, target),
+        HALT => cpu.pc,
+        JP(test) => cpu.alu_jump(test),
+        JPHL => cpu.reg.get_hl(),
+        JR => cpu.alu_jr(),
+        JRIF(condition) => cpu.alu_jr_if(condition),
+        LD(load_type) => cpu.alu_ld(load_type),
+        NOP => cpu.pc.wrapping_add(1),
+        POP(target) => pop(cpu, target),
+        PUSH(target) => push(cpu, target),
+        RET(test) => cpu.alu_ret(test),
+        XOR(target) => xor(cpu, target),
+        _ => cpu.pc, /* TODO: support more instructions */
+    }
+}
+
+fn add(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
     use ArithmeticTarget as AT;
     match target {
         AT::A => cpu.alu_add(cpu.reg.a),
@@ -16,7 +39,7 @@ pub fn add(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
     }
 }
 
-pub fn dec(cpu: &mut CPU, target: IncDecTarget) -> u16 {
+fn dec(cpu: &mut CPU, target: IncDecTarget) -> u16 {
     use IncDecTarget as IDT;
     match target {
         IDT::A => cpu.reg.a = cpu.alu_dec(cpu.reg.a),
@@ -39,7 +62,7 @@ pub fn dec(cpu: &mut CPU, target: IncDecTarget) -> u16 {
     cpu.pc.wrapping_add(1)
 }
 
-pub fn push(cpu: &mut CPU, target: StackTarget) -> u16 {
+fn push(cpu: &mut CPU, target: StackTarget) -> u16 {
     cpu.alu_push(match target {
         StackTarget::AF => cpu.reg.get_af(),
         StackTarget::BC => cpu.reg.get_bc(),
@@ -48,7 +71,7 @@ pub fn push(cpu: &mut CPU, target: StackTarget) -> u16 {
     })
 }
 
-pub fn pop(cpu: &mut CPU, target: StackTarget) -> u16 {
+fn pop(cpu: &mut CPU, target: StackTarget) -> u16 {
     let result = cpu.alu_pop();
     match target {
         StackTarget::AF => cpu.reg.set_af(result),
@@ -59,7 +82,7 @@ pub fn pop(cpu: &mut CPU, target: StackTarget) -> u16 {
     cpu.pc.wrapping_add(1)
 }
 
-pub fn xor(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
+fn xor(cpu: &mut CPU, target: ArithmeticTarget) -> u16 {
     use ArithmeticTarget as AT;
     match target {
         AT::A => cpu.alu_xor(cpu.reg.a),
