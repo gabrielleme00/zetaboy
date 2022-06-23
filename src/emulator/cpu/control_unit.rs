@@ -62,21 +62,23 @@ fn dec(cpu: &mut CPU, target: IncDecTarget) -> u16 {
 }
 
 fn push(cpu: &mut CPU, target: StackTarget) -> u16 {
+    use StackTarget as ST;
     cpu.alu_push(match target {
-        StackTarget::AF => cpu.reg.get_af(),
-        StackTarget::BC => cpu.reg.get_bc(),
-        StackTarget::DE => cpu.reg.get_de(),
-        StackTarget::HL => cpu.reg.get_hl(),
+        ST::AF => cpu.reg.get_af(),
+        ST::BC => cpu.reg.get_bc(),
+        ST::DE => cpu.reg.get_de(),
+        ST::HL => cpu.reg.get_hl(),
     })
 }
 
 fn pop(cpu: &mut CPU, target: StackTarget) -> u16 {
+    use StackTarget as ST;
     let result = cpu.alu_pop();
     match target {
-        StackTarget::AF => cpu.reg.set_af(result),
-        StackTarget::BC => cpu.reg.set_bc(result),
-        StackTarget::DE => cpu.reg.set_de(result),
-        StackTarget::HL => cpu.reg.set_hl(result),
+        ST::AF => cpu.reg.set_af(result),
+        ST::BC => cpu.reg.set_bc(result),
+        ST::DE => cpu.reg.set_de(result),
+        ST::HL => cpu.reg.set_hl(result),
     }
     cpu.pc.wrapping_add(1)
 }
