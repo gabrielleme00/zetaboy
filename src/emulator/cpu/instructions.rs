@@ -199,7 +199,6 @@ impl Instruction {
             0x05 => Some(DEC(IncDecSource::B)),
             0x06 => Some(LD(LT::Byte(LBT::B, LBS::D8))),
             0x07 => Some(RLCA),
-
             0x08 => Some(LD(LT::Word(LWT::D16I, LWS::SP))),
             0x09 => Some(ADDHL(AS16::BC)),
             0x0A => Some(LD(LT::AFromIndirect(LI::BC))),
@@ -216,7 +215,6 @@ impl Instruction {
             0x15 => Some(DEC(IncDecSource::D)),
             0x16 => Some(LD(LT::Byte(LBT::D, LBS::D8))),
             0x17 => Some(RLA),
-
             0x18 => Some(JR),
             0x19 => Some(ADDHL(AS16::DE)),
             0x1A => Some(LD(LT::AFromIndirect(LI::DE))),
@@ -233,7 +231,6 @@ impl Instruction {
             0x24 => Some(INC(IncDecSource::H)),
             0x25 => Some(DEC(IncDecSource::H)),
             0x26 => Some(LD(LT::Byte(LBT::H, LBS::D8))),
-
             0x28 => Some(JRIF(FlagCondition::Z)),
             0x29 => Some(ADDHL(AS16::HL)),
             0x2A => Some(LD(LT::AFromIndirect(LI::HLinc))),
@@ -249,7 +246,6 @@ impl Instruction {
             0x34 => Some(INC(IncDecSource::HL)),
             0x35 => Some(DEC(IncDecSource::HLI)),
             0x36 => Some(LD(LT::Byte(LBT::HLI, LBS::D8))),
-
             0x38 => Some(JRIF(FlagCondition::C)),
             0x39 => Some(ADDHL(AS16::SP)),
             0x3A => Some(LD(LT::AFromIndirect(LI::HLdec))),
@@ -266,7 +262,6 @@ impl Instruction {
             0x45 => Some(LD(LT::Byte(LBT::B, LBS::L))),
             0x46 => Some(LD(LT::Byte(LBT::B, LBS::HLI))),
             0x47 => Some(LD(LT::Byte(LBT::B, LBS::A))),
-
             0x48 => Some(LD(LT::Byte(LBT::C, LBS::B))),
             0x49 => Some(LD(LT::Byte(LBT::C, LBS::C))),
             0x4A => Some(LD(LT::Byte(LBT::C, LBS::D))),
@@ -284,7 +279,6 @@ impl Instruction {
             0x55 => Some(LD(LT::Byte(LBT::D, LBS::L))),
             0x56 => Some(LD(LT::Byte(LBT::D, LBS::HLI))),
             0x57 => Some(LD(LT::Byte(LBT::D, LBS::A))),
-
             0x58 => Some(LD(LT::Byte(LBT::E, LBS::B))),
             0x59 => Some(LD(LT::Byte(LBT::E, LBS::C))),
             0x5A => Some(LD(LT::Byte(LBT::E, LBS::D))),
@@ -302,7 +296,6 @@ impl Instruction {
             0x65 => Some(LD(LT::Byte(LBT::H, LBS::L))),
             0x66 => Some(LD(LT::Byte(LBT::H, LBS::HLI))),
             0x67 => Some(LD(LT::Byte(LBT::H, LBS::A))),
-
             0x68 => Some(LD(LT::Byte(LBT::L, LBS::B))),
             0x69 => Some(LD(LT::Byte(LBT::L, LBS::C))),
             0x6A => Some(LD(LT::Byte(LBT::L, LBS::D))),
@@ -320,7 +313,6 @@ impl Instruction {
             0x75 => Some(LD(LT::Byte(LBT::HLI, LBS::L))),
             0x76 => Some(HALT),
             0x77 => Some(LD(LT::IndirectFromA(LI::HL))),
-
             0x78 => Some(LD(LT::Byte(LBT::A, LBS::B))),
             0x79 => Some(LD(LT::Byte(LBT::A, LBS::C))),
             0x7A => Some(LD(LT::Byte(LBT::A, LBS::D))),
@@ -356,7 +348,6 @@ impl Instruction {
             0xB5 => Some(OR(AS8::L)),
             0xB6 => Some(OR(AS8::HLI)),
             0xB7 => Some(OR(AS8::A)),
-
             0xB8 => Some(CP(CPSource::B)),
             0xB9 => Some(CP(CPSource::C)),
             0xBA => Some(CP(CPSource::D)),
@@ -385,7 +376,6 @@ impl Instruction {
             0xD3 => None,
             0xD4 => Some(CALL(JumpTest::NotCarry)),
             0xD5 => Some(PUSH(StackTarget::DE)),
-
             0xD8 => Some(RET(JumpTest::Carry)),
             0xDA => Some(JP(JumpTest::Carry)),
             0xDB => None,
@@ -398,7 +388,6 @@ impl Instruction {
             0xE3 => None,
             0xE4 => None,
             0xE5 => Some(PUSH(StackTarget::HL)),
-
             0xEB => None,
             0xEC => None,
             0xED => None,
@@ -411,7 +400,6 @@ impl Instruction {
             0xF4 => None,
             0xF5 => Some(PUSH(StackTarget::AF)),
             0xF6 => Some(OR(AS8::D8)),
-
             0xF9 => Some(LD(LT::Word(LWT::SP, LWS::HL))),
             0xFC => None,
             0xFD => None,
