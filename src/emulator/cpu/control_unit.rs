@@ -2,12 +2,14 @@ use super::instructions::*;
 use super::CPU;
 
 use ArithmeticSource8 as AS8;
+use ArithmeticSource16 as AS16;
 
 /// Executes a given `instruction`
 pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     use Instruction::*;
     match instruction {
         ADD(value) => add(cpu, value),
+        ADDHL(value) => add_hl(cpu, value),
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
         HALT => cpu.pc,
@@ -26,11 +28,12 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         RRA => rra(cpu),
         RRCA => rrca(cpu),
         XOR(value) => xor(cpu, value),
-        _ => cpu.pc, /* TODO: support more instructions */
+        // _ => cpu.pc, /* TODO: support more instructions */
     }
 }
 
 fn add(cpu: &mut CPU, value: AS8) -> u16 {
+    let mut length = 1;
     match value {
         AS8::A => cpu.alu_add(cpu.reg.a),
         AS8::B => cpu.alu_add(cpu.reg.b),
@@ -40,8 +43,22 @@ fn add(cpu: &mut CPU, value: AS8) -> u16 {
         AS8::H => cpu.alu_add(cpu.reg.h),
         AS8::L => cpu.alu_add(cpu.reg.l),
         AS8::HLI => cpu.alu_add(cpu.read_byte_hl()),
-        _ => cpu.pc, /* TODO: support more targets */
-    }
+        AS8::D8 => {
+            cpu.alu_add(cpu.read_next_byte());
+            length = 2;
+        },
+    };
+    cpu.pc.wrapping_add(length)
+}
+
+fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
+    match value {
+        AS16::BC => cpu.alu_add_hl(cpu.reg.get_bc()),
+        AS16::DE => cpu.alu_add_hl(cpu.reg.get_de()),
+        AS16::HL => cpu.alu_add_hl(cpu.reg.get_hl()),
+        AS16::SP => cpu.alu_add_hl(cpu.sp),
+    };
+    cpu.pc.wrapping_add(1)
 }
 
 fn call(cpu: &mut CPU, test: JumpTest) -> u16 {

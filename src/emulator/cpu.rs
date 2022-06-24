@@ -89,14 +89,23 @@ impl CPU {
     // TODO: create a separate module for the ALU
 
     /// Adds `value` to the A register (accumulator).
-    fn alu_add(&mut self, value: u8) -> u16 {
+    fn alu_add(&mut self, value: u8) {
         let (new_value, overflow) = self.reg.a.overflowing_add(value);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = (self.reg.a & 0xF) + (value & 0xF) > 0xF;
         self.reg.f.c = overflow;
         self.reg.a = new_value;
-        self.pc.wrapping_add(1)
+    }
+
+    /// Adds `value` to the HL register pair.
+    fn alu_add_hl(&mut self, value: u16) {
+        let old_hl = self.reg.get_hl();
+        let (new_value, overflow) = old_hl.overflowing_add(value);
+        self.reg.f.n = false;
+        self.reg.f.h = (old_hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF;
+        self.reg.f.c = overflow;
+        self.reg.set_hl(new_value);
     }
 
     /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.

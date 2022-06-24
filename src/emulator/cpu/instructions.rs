@@ -1,7 +1,7 @@
 pub enum Instruction {
     // ADC,
     ADD(ArithmeticSource8),
-    // ADDHL(ArithmeticTarget),
+    ADDHL(ArithmeticSource16),
     // ADDSP(ArithmeticTarget),
     // AND,
     // BIT,
@@ -70,6 +70,13 @@ pub enum ArithmeticSource8 {
     L,
     HLI,
     D8,
+}
+
+pub enum ArithmeticSource16 {
+    BC,
+    DE,
+    HL,
+    SP,
 }
 
 pub enum IncDecTarget {
@@ -159,6 +166,7 @@ impl Instruction {
         use Instruction::*;
 
         use ArithmeticSource8 as AS8;
+        use ArithmeticSource16 as AS16;
         use LoadByteSource as LBS;
         use LoadByteTarget as LBT;
         use LoadIndirectTarget as LIT;
@@ -177,7 +185,7 @@ impl Instruction {
             0x07 => Some(RLCA),
 
             0x08 => Some(LD(LT::Word(LWT::D16I, LWS::SP))),
-            // 0x09 => Some(ADDHL(ArithmeticTarget::BC)),
+            0x09 => Some(ADDHL(AS16::BC)),
             0x0B => Some(DEC(IncDecTarget::BC)),
             // 0x0C => Some(INC(ArithmeticTarget::C)),
             0x0D => Some(DEC(IncDecTarget::C)),
@@ -193,7 +201,7 @@ impl Instruction {
             0x17 => Some(RLA),
 
             0x18 => Some(JR),
-            // 0x19 => Some(ADDHL(ArithmeticTarget::DE)),
+            0x19 => Some(ADDHL(AS16::DE)),
             0x1B => Some(DEC(IncDecTarget::DE)),
             // 0x1C => Some(INC(ArithmeticTarget::E)),
             0x1D => Some(DEC(IncDecTarget::E)),
@@ -209,7 +217,7 @@ impl Instruction {
             0x26 => Some(LD(LT::Byte(LBT::H, LBS::D8))),
 
             0x28 => Some(JRIF(FlagCondition::Z)),
-            // 0x29 => Some(ADDHL(ArithmeticTarget::HL)),
+            0x29 => Some(ADDHL(AS16::HL)),
             0x2B => Some(DEC(IncDecTarget::HL)),
             // 0x2C => Some(INC(ArithmeticTarget::L)),
             0x2D => Some(DEC(IncDecTarget::L)),
@@ -224,7 +232,7 @@ impl Instruction {
             0x36 => Some(LD(LT::Byte(LBT::HLI, LBS::D8))),
 
             0x38 => Some(JRIF(FlagCondition::C)),
-            // 0x39 => Some(ADDHL(ArithmeticTarget::SP)),
+            0x39 => Some(ADDHL(AS16::SP)),
             0x3B => Some(DEC(IncDecTarget::SP)),
             // 0x3C => Some(INC(ArithmeticTarget::A)),
             0x3D => Some(DEC(IncDecTarget::A)),
