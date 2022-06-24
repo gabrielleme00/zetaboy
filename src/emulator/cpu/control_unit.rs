@@ -13,6 +13,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
         HALT => cpu.pc,
+        INC(value) => inc(cpu, value),
         JP(test) => jump(cpu, test),
         JPHL => cpu.reg.get_hl(),
         JR => cpu.alu_jr(),
@@ -28,6 +29,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         RRA => rra(cpu),
         RRCA => rrca(cpu),
         XOR(value) => xor(cpu, value),
+        CP(value) => cp(cpu, value),
         // _ => cpu.pc, /* TODO: support more instructions */
     }
 }
@@ -71,25 +73,67 @@ fn call(cpu: &mut CPU, test: JumpTest) -> u16 {
     }
 }
 
-fn dec(cpu: &mut CPU, value: IncDecTarget) -> u16 {
-    use IncDecTarget as IDT;
+fn cp(cpu: &mut CPU, source: CPSource) -> u16 {
+    let mut length = 1;
+    cpu.alu_cp(match source {
+        CPSource::A => cpu.reg.a,
+        CPSource::B => cpu.reg.b,
+        CPSource::C => cpu.reg.c,
+        CPSource::D => cpu.reg.d,
+        CPSource::E => cpu.reg.e,
+        CPSource::H => cpu.reg.h,
+        CPSource::L => cpu.reg.l,
+        CPSource::HLI => cpu.bus.read_byte(cpu.reg.get_hl()),
+        CPSource::D8 => {
+            length = 2;
+            cpu.read_next_byte()
+        },
+    });
+    cpu.pc.wrapping_add(length)
+}
+
+fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
+    use IncDecSource as IDS;
     match value {
-        IDT::A => cpu.reg.a = cpu.alu_dec(cpu.reg.a),
-        IDT::B => cpu.reg.b = cpu.alu_dec(cpu.reg.b),
-        IDT::C => cpu.reg.c = cpu.alu_dec(cpu.reg.c),
-        IDT::D => cpu.reg.d = cpu.alu_dec(cpu.reg.d),
-        IDT::E => cpu.reg.e = cpu.alu_dec(cpu.reg.e),
-        IDT::H => cpu.reg.h = cpu.alu_dec(cpu.reg.h),
-        IDT::L => cpu.reg.l = cpu.alu_dec(cpu.reg.l),
-        IDT::HLI => {
+        IDS::A => cpu.reg.a = cpu.alu_dec(cpu.reg.a),
+        IDS::B => cpu.reg.b = cpu.alu_dec(cpu.reg.b),
+        IDS::C => cpu.reg.c = cpu.alu_dec(cpu.reg.c),
+        IDS::D => cpu.reg.d = cpu.alu_dec(cpu.reg.d),
+        IDS::E => cpu.reg.e = cpu.alu_dec(cpu.reg.e),
+        IDS::H => cpu.reg.h = cpu.alu_dec(cpu.reg.h),
+        IDS::L => cpu.reg.l = cpu.alu_dec(cpu.reg.l),
+        IDS::HLI => {
             let addr = cpu.reg.get_hl();
             let new_value = cpu.alu_dec(cpu.bus.read_byte(addr));
             cpu.bus.write_byte(addr, new_value);
         }
-        IDT::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_sub(1)),
-        IDT::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_sub(1)),
-        IDT::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_sub(1)),
-        IDT::SP => cpu.sp = cpu.sp.wrapping_sub(1),
+        IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_sub(1)),
+        IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_sub(1)),
+        IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_sub(1)),
+        IDS::SP => cpu.sp = cpu.sp.wrapping_sub(1),
+    }
+    cpu.pc.wrapping_add(1)
+}
+
+fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
+    use IncDecSource as IDS;
+    match value {
+        IDS::A => cpu.reg.a = cpu.alu_inc(cpu.reg.a),
+        IDS::B => cpu.reg.b = cpu.alu_inc(cpu.reg.b),
+        IDS::C => cpu.reg.c = cpu.alu_inc(cpu.reg.c),
+        IDS::D => cpu.reg.d = cpu.alu_inc(cpu.reg.d),
+        IDS::E => cpu.reg.e = cpu.alu_inc(cpu.reg.e),
+        IDS::H => cpu.reg.h = cpu.alu_inc(cpu.reg.h),
+        IDS::L => cpu.reg.l = cpu.alu_inc(cpu.reg.l),
+        IDS::HLI => {
+            let addr = cpu.reg.get_hl();
+            let new_value = cpu.alu_inc(cpu.bus.read_byte(addr));
+            cpu.bus.write_byte(addr, new_value);
+        }
+        IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_add(1)),
+        IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_add(1)),
+        IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_add(1)),
+        IDS::SP => cpu.sp = cpu.sp.wrapping_add(1),
     }
     cpu.pc.wrapping_add(1)
 }
@@ -171,21 +215,26 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
         }
         LoadType::IndirectFromA(value) => {
             match value {
-                LoadIndirectTarget::BC => cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a),
-                LoadIndirectTarget::DE => cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a),
-                LoadIndirectTarget::HLP => {
+                LoadIndirect::BC => cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a),
+                LoadIndirect::DE => cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a),
+                LoadIndirect::HLinc => {
                     let hl = cpu.reg.get_hl();
                     cpu.bus.write_byte(hl, cpu.reg.a);
                     cpu.reg.set_hl(hl.wrapping_add(1));
                 }
-                LoadIndirectTarget::HLM => {
+                LoadIndirect::HLdec => {
                     let hl = cpu.reg.get_hl();
                     cpu.bus.write_byte(hl, cpu.reg.a);
                     cpu.reg.set_hl(hl.wrapping_sub(1));
                 }
+                LoadIndirect::HL => todo!(),
+                LoadIndirect::D8 => todo!(),
+                LoadIndirect::D16 => todo!(),
+                LoadIndirect::C => todo!(),
             }
             cpu.pc.wrapping_add(1)
         }
+        LoadType::AFromIndirect(_) => todo!(),
     }
 }
 

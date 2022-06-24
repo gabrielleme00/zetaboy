@@ -7,12 +7,12 @@ pub enum Instruction {
     // BIT,
     CALL(JumpTest),
     // CCF,
-    // CP,
+    CP(CPSource),
     // CPL,
-    DEC(IncDecTarget),
+    DEC(IncDecSource),
     // DI,
     HALT,
-    // INC(ArithmeticTarget),
+    INC(IncDecSource),
     JP(JumpTest),
     JPHL,
     JR,
@@ -79,7 +79,7 @@ pub enum ArithmeticSource16 {
     SP,
 }
 
-pub enum IncDecTarget {
+pub enum IncDecSource {
     A,
     B,
     C,
@@ -97,8 +97,8 @@ pub enum IncDecTarget {
 pub enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
     Word(LoadWordTarget, LoadWordSource),
-    // AFromIndirect(_),
-    IndirectFromA(LoadIndirectTarget),
+    AFromIndirect(LoadIndirect),
+    IndirectFromA(LoadIndirect),
     // AFromByteAddress(_),
     // ByteAddressFromA(_),
 }
@@ -140,11 +140,15 @@ pub enum LoadWordSource {
     D16,
 }
 
-pub enum LoadIndirectTarget {
+pub enum LoadIndirect {
     BC,
     DE,
-    HLP,
-    HLM,
+    HL,
+    HLinc,
+    HLdec,
+    D8,
+    D16,
+    C,
 }
 
 pub enum StackTarget {
@@ -152,6 +156,18 @@ pub enum StackTarget {
     BC,
     DE,
     HL,
+}
+
+pub enum CPSource {
+    A,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    HLI,
+    D8,
 }
 
 impl Instruction {
@@ -165,11 +181,11 @@ impl Instruction {
     pub fn from_byte_not_prefixed(byte: u8) -> Option<Self> {
         use Instruction::*;
 
-        use ArithmeticSource8 as AS8;
         use ArithmeticSource16 as AS16;
+        use ArithmeticSource8 as AS8;
         use LoadByteSource as LBS;
         use LoadByteTarget as LBT;
-        use LoadIndirectTarget as LIT;
+        use LoadIndirect as LI;
         use LoadType as LT;
         use LoadWordSource as LWS;
         use LoadWordTarget as LWT;
@@ -177,65 +193,69 @@ impl Instruction {
         match byte {
             0x00 => Some(NOP),
             0x01 => Some(LD(LT::Word(LWT::BC, LWS::D16))),
-            0x02 => Some(LD(LT::IndirectFromA(LIT::BC))),
-            // 0x03 => Some(INC(ArithmeticTarget::BC)),
-            // 0x04 => Some(INC(ArithmeticTarget::B)),
-            0x05 => Some(DEC(IncDecTarget::B)),
+            0x02 => Some(LD(LT::IndirectFromA(LI::BC))),
+            0x03 => Some(INC(IncDecSource::BC)),
+            0x04 => Some(INC(IncDecSource::B)),
+            0x05 => Some(DEC(IncDecSource::B)),
             0x06 => Some(LD(LT::Byte(LBT::B, LBS::D8))),
             0x07 => Some(RLCA),
 
             0x08 => Some(LD(LT::Word(LWT::D16I, LWS::SP))),
             0x09 => Some(ADDHL(AS16::BC)),
-            0x0B => Some(DEC(IncDecTarget::BC)),
-            // 0x0C => Some(INC(ArithmeticTarget::C)),
-            0x0D => Some(DEC(IncDecTarget::C)),
+            0x0A => Some(LD(LT::AFromIndirect(LI::BC))),
+            0x0B => Some(DEC(IncDecSource::BC)),
+            0x0C => Some(INC(IncDecSource::C)),
+            0x0D => Some(DEC(IncDecSource::C)),
             0x0E => Some(LD(LT::Byte(LBT::C, LBS::D8))),
             0x0F => Some(RRCA),
 
             0x11 => Some(LD(LT::Word(LWT::DE, LWS::D16))),
-            0x12 => Some(LD(LT::IndirectFromA(LIT::DE))),
-            // 0x13 => Some(INC(ArithmeticTarget::DE)),
-            // 0x14 => Some(INC(ArithmeticTarget::D)),
-            0x15 => Some(DEC(IncDecTarget::D)),
+            0x12 => Some(LD(LT::IndirectFromA(LI::DE))),
+            0x13 => Some(INC(IncDecSource::DE)),
+            0x14 => Some(INC(IncDecSource::D)),
+            0x15 => Some(DEC(IncDecSource::D)),
             0x16 => Some(LD(LT::Byte(LBT::D, LBS::D8))),
             0x17 => Some(RLA),
 
             0x18 => Some(JR),
             0x19 => Some(ADDHL(AS16::DE)),
-            0x1B => Some(DEC(IncDecTarget::DE)),
-            // 0x1C => Some(INC(ArithmeticTarget::E)),
-            0x1D => Some(DEC(IncDecTarget::E)),
+            0x1A => Some(LD(LT::AFromIndirect(LI::DE))),
+            0x1B => Some(DEC(IncDecSource::DE)),
+            0x1C => Some(INC(IncDecSource::E)),
+            0x1D => Some(DEC(IncDecSource::E)),
             0x1E => Some(LD(LT::Byte(LBT::E, LBS::D8))),
             0x1F => Some(RRA),
 
             0x20 => Some(JRIF(FlagCondition::NZ)),
             0x21 => Some(LD(LT::Word(LWT::HL, LWS::D16))),
-            0x22 => Some(LD(LT::IndirectFromA(LIT::HLP))),
-            // 0x23 => Some(INC(ArithmeticTarget::HL)),
-            // 0x24 => Some(INC(ArithmeticTarget::H)),
-            0x25 => Some(DEC(IncDecTarget::H)),
+            0x22 => Some(LD(LT::IndirectFromA(LI::HLinc))),
+            0x23 => Some(INC(IncDecSource::HL)),
+            0x24 => Some(INC(IncDecSource::H)),
+            0x25 => Some(DEC(IncDecSource::H)),
             0x26 => Some(LD(LT::Byte(LBT::H, LBS::D8))),
 
             0x28 => Some(JRIF(FlagCondition::Z)),
             0x29 => Some(ADDHL(AS16::HL)),
-            0x2B => Some(DEC(IncDecTarget::HL)),
-            // 0x2C => Some(INC(ArithmeticTarget::L)),
-            0x2D => Some(DEC(IncDecTarget::L)),
+            0x2A => Some(LD(LT::AFromIndirect(LI::HLinc))),
+            0x2B => Some(DEC(IncDecSource::HL)),
+            0x2C => Some(INC(IncDecSource::L)),
+            0x2D => Some(DEC(IncDecSource::L)),
             0x2E => Some(LD(LT::Byte(LBT::L, LBS::D8))),
 
             0x30 => Some(JRIF(FlagCondition::NC)),
             0x31 => Some(LD(LT::Word(LWT::SP, LWS::D16))),
-            0x32 => Some(LD(LT::IndirectFromA(LIT::HLM))),
-            // 0x33 => Some(INC(ArithmeticTarget::SP)),
-            // 0x34 => Some(INC(ArithmeticTarget::HL)),
-            0x35 => Some(DEC(IncDecTarget::HLI)),
+            0x32 => Some(LD(LT::IndirectFromA(LI::HLdec))),
+            0x33 => Some(INC(IncDecSource::SP)),
+            0x34 => Some(INC(IncDecSource::HL)),
+            0x35 => Some(DEC(IncDecSource::HLI)),
             0x36 => Some(LD(LT::Byte(LBT::HLI, LBS::D8))),
 
             0x38 => Some(JRIF(FlagCondition::C)),
             0x39 => Some(ADDHL(AS16::SP)),
-            0x3B => Some(DEC(IncDecTarget::SP)),
-            // 0x3C => Some(INC(ArithmeticTarget::A)),
-            0x3D => Some(DEC(IncDecTarget::A)),
+            0x3A => Some(LD(LT::AFromIndirect(LI::HLdec))),
+            0x3B => Some(DEC(IncDecSource::SP)),
+            0x3C => Some(INC(IncDecSource::A)),
+            0x3D => Some(DEC(IncDecSource::A)),
             0x3E => Some(LD(LT::Byte(LBT::A, LBS::D8))),
 
             0x40 => Some(LD(LT::Byte(LBT::B, LBS::B))),
@@ -299,7 +319,7 @@ impl Instruction {
             0x74 => Some(LD(LT::Byte(LBT::HLI, LBS::H))),
             0x75 => Some(LD(LT::Byte(LBT::HLI, LBS::L))),
             0x76 => Some(HALT),
-            0x77 => Some(LD(LT::Byte(LBT::HLI, LBS::A))),
+            0x77 => Some(LD(LT::IndirectFromA(LI::HL))),
 
             0x78 => Some(LD(LT::Byte(LBT::A, LBS::B))),
             0x79 => Some(LD(LT::Byte(LBT::A, LBS::C))),
@@ -337,6 +357,15 @@ impl Instruction {
             0xB6 => Some(OR(AS8::HLI)),
             0xB7 => Some(OR(AS8::A)),
 
+            0xB8 => Some(CP(CPSource::B)),
+            0xB9 => Some(CP(CPSource::C)),
+            0xBA => Some(CP(CPSource::D)),
+            0xBB => Some(CP(CPSource::E)),
+            0xBC => Some(CP(CPSource::H)),
+            0xBD => Some(CP(CPSource::L)),
+            0xBE => Some(CP(CPSource::HLI)),
+            0xBF => Some(CP(CPSource::A)),
+
             0xC0 => Some(RET(JumpTest::NotZero)),
             0xC1 => Some(POP(StackTarget::BC)),
             0xC2 => Some(JP(JumpTest::NotZero)),
@@ -363,7 +392,9 @@ impl Instruction {
             0xDC => Some(CALL(JumpTest::Carry)),
             0xDD => None,
 
+            0xE0 => Some(LD(LT::IndirectFromA(LI::D8))),
             0xE1 => Some(POP(StackTarget::HL)),
+            0xE2 => Some(LD(LT::IndirectFromA(LI::C))),
             0xE3 => None,
             0xE4 => None,
             0xE5 => Some(PUSH(StackTarget::HL)),
@@ -374,6 +405,7 @@ impl Instruction {
             0xEE => Some(XOR(AS8::D8)),
             // 0xE8 => Some(ADDSP(ArithmeticTarget::D8)),
             0xE9 => Some(JPHL),
+            0xEA => Some(LD(LT::IndirectFromA(LI::D16))),
 
             0xF1 => Some(POP(StackTarget::AF)),
             0xF4 => None,

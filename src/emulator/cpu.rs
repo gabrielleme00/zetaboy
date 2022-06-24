@@ -108,11 +108,27 @@ impl CPU {
         self.reg.set_hl(new_value);
     }
 
+    /// Compares register A and the given `value` by calculating: A - `value`.
+    fn alu_cp(&mut self, value: u8) {
+        let a = self.reg.a;
+        self.alu_sub(value); 
+        self.reg.a = a;
+    }
+
     /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
     fn alu_dec(&mut self, value: u8) -> u8 {
         let new_value = value.wrapping_sub(1);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = true;
+        self.reg.f.h = value.trailing_zeros() >= 4;
+        new_value
+    }
+
+    /// Increments 1 from the `value` and returns it. Updates flags Z, N and H.
+    fn alu_inc(&mut self, value: u8) -> u8 {
+        let new_value = value.wrapping_add(1);
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
         self.reg.f.h = value.trailing_zeros() >= 4;
         new_value
     }
@@ -165,6 +181,16 @@ impl CPU {
         self.reg.f.h = false;
         self.reg.f.c = old_bit_0 == 1;
         new_value
+    }
+
+    fn alu_sub(&mut self, value: u8) {
+        let old_a = self.reg.a;
+        let new_a = self.reg.a.wrapping_sub(value);
+        self.reg.f.z = new_a == 0;
+        self.reg.f.n = true;
+        self.reg.f.h = (old_a & 0xF) < (value & 0xF);
+        self.reg.f.c = (old_a as u16) < (value as u16);
+        self.reg.a = new_a;
     }
 
     fn alu_or(&mut self, value: u8) {
