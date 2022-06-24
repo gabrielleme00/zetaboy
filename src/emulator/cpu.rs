@@ -90,17 +90,30 @@ impl CPU {
     // --- ALU ---
     // TODO: create a separate module for the ALU
 
-    // x8/rsb
-
-    /// Rotates A to the left. Old bit 7 is copied to Carry flag.
-    fn alu_rlc(&mut self, value: u8) -> u8 {
-        let old_bit_0 = (value & 0x80) >> 7;
-        let new_value = (value << 1) | old_bit_0;
-        self.reg.f.z = false;
+    /// Adds `value` to the A register (accumulator).
+    fn alu_add(&mut self, value: u8) -> u16 {
+        let (new_value, overflow) = self.reg.a.overflowing_add(value);
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
-        self.reg.f.h = false;
-        self.reg.f.c = old_bit_0 == 1;
+        self.reg.f.h = (self.reg.a & 0xF) + (value & 0xF) > 0xF;
+        self.reg.f.c = overflow;
+        self.reg.a = new_value;
+        self.pc.wrapping_add(1)
+    }
+
+    /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
+    fn alu_dec(&mut self, value: u8) -> u8 {
+        let new_value = value.wrapping_sub(1);
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = true;
+        self.reg.f.h = value.trailing_zeros() >= 4;
         new_value
+    }
+
+    /// Adds the immediate next byte value to the current address and jumps
+    /// to it.
+    fn alu_jr(&mut self) -> u16 {
+        ((self.pc as i32) + (self.read_next_byte() as i32)) as u16
     }
 
     /// Rotates A to the left through Carry flag.
@@ -114,10 +127,10 @@ impl CPU {
         new_value
     }
 
-    /// Rotates A to the right. Old bit 0 is copied to Carry flag.
-    fn alu_rrc(&mut self, value: u8) -> u8 {
-        let old_bit_0 = value & 1;
-        let new_value = (value >> 1) | (old_bit_0 << 7);
+    /// Rotates A to the left. Old bit 7 is copied to Carry flag.
+    fn alu_rlc(&mut self, value: u8) -> u8 {
+        let old_bit_0 = (value & 0x80) >> 7;
+        let new_value = (value << 1) | old_bit_0;
         self.reg.f.z = false;
         self.reg.f.n = false;
         self.reg.f.h = false;
@@ -136,71 +149,15 @@ impl CPU {
         new_value
     }
 
-    // Branch operations
-
-    /// Jumps to the address given by the next 2 bytes if the condition is met.
-    fn alu_jump(&self, test: JumpTest) -> u16 {
-        if self.test_jump_condition(test) {
-            // Game Boy is little endian so read pc + 2 as most significant byte
-            // and pc + 1 as least significant byte
-            let least_significant_byte = self.bus.read_byte(self.pc + 1) as u16;
-            let most_significant_byte = self.bus.read_byte(self.pc + 2) as u16;
-            (most_significant_byte << 8) | least_significant_byte
-        } else {
-            // Jump instructions are always 3 bytes wide
-            self.pc.wrapping_add(3)
-        }
-    }
-
-    fn alu_call(&mut self, test: JumpTest) -> u16 {
-        let next_pc = self.pc.wrapping_add(3);
-        if self.test_jump_condition(test) {
-            self.alu_push(next_pc);
-            self.read_next_word()
-        } else {
-            next_pc
-        }
-    }
-
-    fn alu_ret(&mut self, test: JumpTest) -> u16 {
-        if self.test_jump_condition(test) {
-            self.alu_pop()
-        } else {
-            self.pc.wrapping_add(1)
-        }
-    }
-
-    /// Adds the immediate next byte value to the current address and jumps
-    /// to it.
-    fn alu_jr(&mut self) -> u16 {
-        ((self.pc as i32) + (self.read_next_byte() as i32)) as u16
-    }
-
-    /// Executes JR if a flag condition is met.
-    fn alu_jr_if(&mut self, condition: FlagCondition) -> u16 {
-        if match condition {
-            FlagCondition::C => self.reg.f.c,
-            FlagCondition::Z => self.reg.f.z,
-            FlagCondition::NC => !self.reg.f.c,
-            FlagCondition::NZ => !self.reg.f.z,
-        } {
-            self.alu_jr()
-        } else {
-            self.pc.wrapping_add(2)
-        }
-    }
-
-    // 16-bit Load/Store/Move
-
-    /// Pushes a `value` to the top of the stack.
-    fn alu_push(&mut self, value: u16) -> u16 {
-        self.sp = self.sp.wrapping_sub(1);
-        self.bus.write_byte(self.sp, (value >> 8) as u8);
-
-        self.sp = self.sp.wrapping_sub(1);
-        self.bus.write_byte(self.sp, (value & 0xFF) as u8);
-
-        self.pc.wrapping_add(1)
+    /// Rotates A to the right. Old bit 0 is copied to Carry flag.
+    fn alu_rrc(&mut self, value: u8) -> u8 {
+        let old_bit_0 = value & 1;
+        let new_value = (value >> 1) | (old_bit_0 << 7);
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
     }
 
     /// Pops the last value from the stack.
@@ -214,83 +171,14 @@ impl CPU {
         (msb << 8) | lsb
     }
 
-    /// Loads a value into a register or address.
-    fn alu_ld(&mut self, load_type: LoadType) -> u16 {
-        use LoadByteSource as LBS;
-        use LoadByteTarget as LBT;
+    /// Pushes a `value` to the top of the stack.
+    fn alu_push(&mut self, value: u16) -> u16 {
+        self.sp = self.sp.wrapping_sub(1);
+        self.bus.write_byte(self.sp, (value >> 8) as u8);
 
-        match load_type {
-            LoadType::Byte(target, source) => {
-                let source_value = match source {
-                    LBS::A => self.reg.a,
-                    LBS::B => self.reg.a,
-                    LBS::C => self.reg.a,
-                    LBS::D => self.reg.a,
-                    LBS::E => self.reg.a,
-                    LBS::H => self.reg.h,
-                    LBS::L => self.reg.l,
-                    LBS::D8 => self.read_next_byte(),
-                    LBS::HLI => self.read_byte_hl(),
-                };
-                match target {
-                    LBT::A => self.reg.a = source_value,
-                    LBT::B => self.reg.b = source_value,
-                    LBT::C => self.reg.c = source_value,
-                    LBT::D => self.reg.d = source_value,
-                    LBT::E => self.reg.e = source_value,
-                    LBT::H => self.reg.h = source_value,
-                    LBT::L => self.reg.l = source_value,
-                    LBT::HLI => self.bus.write_byte(self.reg.get_hl(), source_value),
-                };
-                match source {
-                    LBS::D8 => self.pc.wrapping_add(2),
-                    _ => self.pc.wrapping_add(2),
-                }
-            }
-            LoadType::Word(target, source) => {
-                let source_value = match source {
-                    LoadWordSource::D16 => self.read_next_word(),
-                    _ => panic!("LoadWordSource not implemented"),
-                };
-                match target {
-                    LoadWordTarget::HL => self.reg.set_hl(source_value),
-                    _ => panic!("LoadWordTarget not implemented"),
-                };
-                match source {
-                    LoadWordSource::D16 => self.pc.wrapping_add(3),
-                    _ => panic!("LoadWord length not implemented"),
-                }
-            }
-            LoadType::IndirectFromA(target) => {
-                match target {
-                    LoadIndirectTarget::BC => self.bus.write_byte(self.reg.get_bc(), self.reg.a),
-                    LoadIndirectTarget::DE => self.bus.write_byte(self.reg.get_de(), self.reg.a),
-                    LoadIndirectTarget::HLP => {
-                        let hl = self.reg.get_hl();
-                        self.bus.write_byte(hl, self.reg.a);
-                        self.reg.set_hl(hl.wrapping_add(1));
-                    }
-                    LoadIndirectTarget::HLM => {
-                        let hl = self.reg.get_hl();
-                        self.bus.write_byte(hl, self.reg.a);
-                        self.reg.set_hl(hl.wrapping_sub(1));
-                    }
-                }
-                self.pc.wrapping_add(1)
-            }
-        }
-    }
+        self.sp = self.sp.wrapping_sub(1);
+        self.bus.write_byte(self.sp, (value & 0xFF) as u8);
 
-    // 8-bit Arithmetic Logic Unit
-
-    /// Adds `value` to the A register (accumulator).
-    fn alu_add(&mut self, value: u8) -> u16 {
-        let (new_value, overflow) = self.reg.a.overflowing_add(value);
-        self.reg.f.z = new_value == 0;
-        self.reg.f.n = false;
-        self.reg.f.h = (self.reg.a & 0xF) + (value & 0xF) > 0xF;
-        self.reg.f.c = overflow;
-        self.reg.a = new_value;
         self.pc.wrapping_add(1)
     }
 
@@ -303,14 +191,5 @@ impl CPU {
         self.reg.f.c = false;
         self.reg.a = new_value;
         self.pc.wrapping_add(1)
-    }
-
-    /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
-    fn alu_dec(&mut self, value: u8) -> u8 {
-        let new_value = value.wrapping_sub(1);
-        self.reg.f.z = new_value == 0;
-        self.reg.f.n = true;
-        self.reg.f.h = value.trailing_zeros() >= 4;
-        new_value
     }
 }
