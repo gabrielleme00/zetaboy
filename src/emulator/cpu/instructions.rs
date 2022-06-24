@@ -415,6 +415,7 @@ impl Instruction {
             0xF9 => Some(LD(LT::Word(LWT::SP, LWS::HL))),
             0xFC => None,
             0xFD => None,
+            0xFE => Some(CP(CPSource::D8)),
 
             _ => None,
         }
