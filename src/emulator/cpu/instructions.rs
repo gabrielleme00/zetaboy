@@ -1,3 +1,7 @@
+mod operands;
+
+pub use operands::*;
+
 pub enum Instruction {
     // ADC,
     ADD(ArithmeticSource8),
@@ -5,15 +9,15 @@ pub enum Instruction {
     // ADDSP(ArithmeticTarget),
     // AND,
     // BIT,
-    CALL(JumpTest),
+    CALL(JumpCondition),
     // CCF,
-    CP(CPSource),
+    CP(ArithmeticSource8),
     // CPL,
     DEC(IncDecSource),
     // DI,
     HALT,
     INC(IncDecSource),
-    JP(JumpTest),
+    JP(JumpCondition),
     JPHL,
     JR,
     JRIF(FlagCondition),
@@ -22,7 +26,7 @@ pub enum Instruction {
     OR(ArithmeticSource8),
     POP(StackTarget),
     PUSH(StackTarget),
-    RET(JumpTest),
+    RET(JumpCondition),
     // RETI,
     // RST,
     // RL,
@@ -43,131 +47,6 @@ pub enum Instruction {
     // SUB,
     // SWAP,
     XOR(ArithmeticSource8),
-}
-
-pub enum FlagCondition {
-    NZ,
-    NC,
-    Z,
-    C,
-}
-
-pub enum JumpTest {
-    Always,
-    Zero,
-    NotZero,
-    Carry,
-    NotCarry,
-}
-
-pub enum ArithmeticSource8 {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    HLI,
-    D8,
-}
-
-pub enum ArithmeticSource16 {
-    BC,
-    DE,
-    HL,
-    SP,
-}
-
-pub enum IncDecSource {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    SP,
-    BC,
-    DE,
-    HL,
-    HLI,
-}
-
-pub enum LoadType {
-    Byte(LoadByteTarget, LoadByteSource),
-    Word(LoadWordTarget, LoadWordSource),
-    AFromIndirect(LoadIndirect),
-    IndirectFromA(LoadIndirect),
-    // AFromByteAddress(_),
-    // ByteAddressFromA(_),
-}
-
-pub enum LoadByteTarget {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    HLI,
-}
-
-pub enum LoadByteSource {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    HLI,
-    D8,
-}
-
-pub enum LoadWordTarget {
-    BC,
-    DE,
-    HL,
-    SP,
-    D16I,
-}
-
-pub enum LoadWordSource {
-    HL,
-    SP,
-    D16,
-}
-
-pub enum LoadIndirect {
-    BC,
-    DE,
-    HL,
-    HLinc,
-    HLdec,
-    D8,
-    D16,
-    C,
-}
-
-pub enum StackTarget {
-    AF,
-    BC,
-    DE,
-    HL,
-}
-
-pub enum CPSource {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    HLI,
-    D8,
 }
 
 impl Instruction {
@@ -224,14 +103,14 @@ impl Instruction {
             0x1E => Some(LD(LT::Byte(LBT::E, LBS::D8))),
             0x1F => Some(RRA),
 
-            0x20 => Some(JRIF(FlagCondition::NZ)),
+            0x20 => Some(JRIF(FlagCondition::NotZero)),
             0x21 => Some(LD(LT::Word(LWT::HL, LWS::D16))),
             0x22 => Some(LD(LT::IndirectFromA(LI::HLinc))),
             0x23 => Some(INC(IncDecSource::HL)),
             0x24 => Some(INC(IncDecSource::H)),
             0x25 => Some(DEC(IncDecSource::H)),
             0x26 => Some(LD(LT::Byte(LBT::H, LBS::D8))),
-            0x28 => Some(JRIF(FlagCondition::Z)),
+            0x28 => Some(JRIF(FlagCondition::Zero)),
             0x29 => Some(ADDHL(AS16::HL)),
             0x2A => Some(LD(LT::AFromIndirect(LI::HLinc))),
             0x2B => Some(DEC(IncDecSource::HL)),
@@ -239,14 +118,14 @@ impl Instruction {
             0x2D => Some(DEC(IncDecSource::L)),
             0x2E => Some(LD(LT::Byte(LBT::L, LBS::D8))),
 
-            0x30 => Some(JRIF(FlagCondition::NC)),
+            0x30 => Some(JRIF(FlagCondition::NotCarry)),
             0x31 => Some(LD(LT::Word(LWT::SP, LWS::D16))),
             0x32 => Some(LD(LT::IndirectFromA(LI::HLdec))),
             0x33 => Some(INC(IncDecSource::SP)),
             0x34 => Some(INC(IncDecSource::HL)),
             0x35 => Some(DEC(IncDecSource::HLI)),
             0x36 => Some(LD(LT::Byte(LBT::HLI, LBS::D8))),
-            0x38 => Some(JRIF(FlagCondition::C)),
+            0x38 => Some(JRIF(FlagCondition::Carry)),
             0x39 => Some(ADDHL(AS16::SP)),
             0x3A => Some(LD(LT::AFromIndirect(LI::HLdec))),
             0x3B => Some(DEC(IncDecSource::SP)),
@@ -348,38 +227,38 @@ impl Instruction {
             0xB5 => Some(OR(AS8::L)),
             0xB6 => Some(OR(AS8::HLI)),
             0xB7 => Some(OR(AS8::A)),
-            0xB8 => Some(CP(CPSource::B)),
-            0xB9 => Some(CP(CPSource::C)),
-            0xBA => Some(CP(CPSource::D)),
-            0xBB => Some(CP(CPSource::E)),
-            0xBC => Some(CP(CPSource::H)),
-            0xBD => Some(CP(CPSource::L)),
-            0xBE => Some(CP(CPSource::HLI)),
-            0xBF => Some(CP(CPSource::A)),
+            0xB8 => Some(CP(AS8::B)),
+            0xB9 => Some(CP(AS8::C)),
+            0xBA => Some(CP(AS8::D)),
+            0xBB => Some(CP(AS8::E)),
+            0xBC => Some(CP(AS8::H)),
+            0xBD => Some(CP(AS8::L)),
+            0xBE => Some(CP(AS8::HLI)),
+            0xBF => Some(CP(AS8::A)),
 
-            0xC0 => Some(RET(JumpTest::NotZero)),
+            0xC0 => Some(RET(JumpCondition::Flag(FlagCondition::NotZero))),
             0xC1 => Some(POP(StackTarget::BC)),
-            0xC2 => Some(JP(JumpTest::NotZero)),
-            0xC3 => Some(JP(JumpTest::Always)),
-            0xC4 => Some(CALL(JumpTest::NotZero)),
+            0xC2 => Some(JP(JumpCondition::Flag(FlagCondition::NotZero))),
+            0xC3 => Some(JP(JumpCondition::Always)),
+            0xC4 => Some(CALL(JumpCondition::Flag(FlagCondition::NotZero))),
             0xC5 => Some(PUSH(StackTarget::BC)),
             // 0xC6 => Some(ADD(ArithmeticTarget::D8)),
-            0xC8 => Some(RET(JumpTest::Zero)),
-            0xC9 => Some(RET(JumpTest::Always)),
-            0xCA => Some(JP(JumpTest::Zero)),
-            0xCC => Some(CALL(JumpTest::Zero)),
-            0xCD => Some(CALL(JumpTest::Always)),
+            0xC8 => Some(RET(JumpCondition::Flag(FlagCondition::Zero))),
+            0xC9 => Some(RET(JumpCondition::Always)),
+            0xCA => Some(JP(JumpCondition::Flag(FlagCondition::Zero))),
+            0xCC => Some(CALL(JumpCondition::Flag(FlagCondition::Zero))),
+            0xCD => Some(CALL(JumpCondition::Always)),
 
-            0xD0 => Some(RET(JumpTest::NotCarry)),
+            0xD0 => Some(RET(JumpCondition::Flag(FlagCondition::NotCarry))),
             0xD1 => Some(POP(StackTarget::DE)),
-            0xD2 => Some(JP(JumpTest::NotCarry)),
+            0xD2 => Some(JP(JumpCondition::Flag(FlagCondition::NotCarry))),
             0xD3 => None,
-            0xD4 => Some(CALL(JumpTest::NotCarry)),
+            0xD4 => Some(CALL(JumpCondition::Flag(FlagCondition::NotCarry))),
             0xD5 => Some(PUSH(StackTarget::DE)),
-            0xD8 => Some(RET(JumpTest::Carry)),
-            0xDA => Some(JP(JumpTest::Carry)),
+            0xD8 => Some(RET(JumpCondition::Flag(FlagCondition::Carry))),
+            0xDA => Some(JP(JumpCondition::Flag(FlagCondition::Carry))),
             0xDB => None,
-            0xDC => Some(CALL(JumpTest::Carry)),
+            0xDC => Some(CALL(JumpCondition::Flag(FlagCondition::Carry))),
             0xDD => None,
 
             0xE0 => Some(LD(LT::IndirectFromA(LI::D8))),
@@ -403,7 +282,7 @@ impl Instruction {
             0xF9 => Some(LD(LT::Word(LWT::SP, LWS::HL))),
             0xFC => None,
             0xFD => None,
-            0xFE => Some(CP(CPSource::D8)),
+            0xFE => Some(CP(AS8::D8)),
 
             _ => None,
         }

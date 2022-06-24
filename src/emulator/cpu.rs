@@ -75,13 +75,13 @@ impl CPU {
     }
 
     /// Evaluates the jump condition and returns a boolean result.
-    fn test_jump_condition(&self, test: JumpTest) -> bool {
+    fn test_jump_condition(&self, test: JumpCondition) -> bool {
         match test {
-            JumpTest::Always => true,
-            JumpTest::Zero => self.reg.f.z,
-            JumpTest::NotZero => !self.reg.f.z,
-            JumpTest::Carry => self.reg.f.c,
-            JumpTest::NotCarry => !self.reg.f.c,
+            JumpCondition::Always => true,
+            JumpCondition::Flag(FlagCondition::Zero) => self.reg.f.z,
+            JumpCondition::Flag(FlagCondition::NotZero) => !self.reg.f.z,
+            JumpCondition::Flag(FlagCondition::Carry) => self.reg.f.c,
+            JumpCondition::Flag(FlagCondition::NotCarry) => !self.reg.f.c,
         }
     }
 
