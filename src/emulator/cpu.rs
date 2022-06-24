@@ -3,8 +3,6 @@ mod control_unit;
 mod instructions;
 mod registers;
 
-use core::panic;
-
 use bus::*;
 use instructions::*;
 use registers::*;
@@ -160,6 +158,15 @@ impl CPU {
         new_value
     }
 
+    fn alu_or(&mut self, value: u8) {
+        let new_value = self.reg.a | value;
+        self.reg.f.z = false;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = new_value == 0;
+        self.reg.a = new_value;
+    }
+
     /// Pops the last value from the stack.
     fn alu_pop(&mut self) -> u16 {
         let lsb = self.bus.read_byte(self.sp) as u16;
@@ -183,13 +190,12 @@ impl CPU {
     }
 
     /// XORs `value` to the A register (accumulator).
-    fn alu_xor(&mut self, value: u8) -> u16 {
+    fn alu_xor(&mut self, value: u8) {
         let new_value = self.reg.a ^ value;
         self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
         self.reg.f.c = false;
         self.reg.a = new_value;
-        self.pc.wrapping_add(1)
     }
 }

@@ -1,6 +1,6 @@
 pub enum Instruction {
     // ADC,
-    ADD(ArithmeticTarget),
+    ADD(ArithmeticSource8),
     // ADDHL(ArithmeticTarget),
     // ADDSP(ArithmeticTarget),
     // AND,
@@ -19,7 +19,7 @@ pub enum Instruction {
     JRIF(FlagCondition),
     LD(LoadType),
     NOP,
-    // OR,
+    OR(ArithmeticSource8),
     POP(StackTarget),
     PUSH(StackTarget),
     RET(JumpTest),
@@ -42,7 +42,7 @@ pub enum Instruction {
     // STOP,
     // SUB,
     // SWAP,
-    XOR(ArithmeticTarget),
+    XOR(ArithmeticSource8),
 }
 
 pub enum FlagCondition {
@@ -60,7 +60,7 @@ pub enum JumpTest {
     NotCarry,
 }
 
-pub enum ArithmeticTarget {
+pub enum ArithmeticSource8 {
     A,
     B,
     C,
@@ -157,6 +157,8 @@ impl Instruction {
 
     pub fn from_byte_not_prefixed(byte: u8) -> Option<Self> {
         use Instruction::*;
+
+        use ArithmeticSource8 as AS8;
         use LoadByteSource as LBS;
         use LoadByteTarget as LBT;
         use LoadIndirectTarget as LIT;
@@ -300,23 +302,32 @@ impl Instruction {
             0x7E => Some(LD(LT::Byte(LBT::A, LBS::HLI))),
             0x7F => Some(LD(LT::Byte(LBT::A, LBS::A))),
 
-            0x80 => Some(ADD(ArithmeticTarget::B)),
-            0x81 => Some(ADD(ArithmeticTarget::C)),
-            0x82 => Some(ADD(ArithmeticTarget::D)),
-            0x83 => Some(ADD(ArithmeticTarget::E)),
-            0x84 => Some(ADD(ArithmeticTarget::H)),
-            0x85 => Some(ADD(ArithmeticTarget::L)),
-            0x86 => Some(ADD(ArithmeticTarget::HLI)),
-            0x87 => Some(ADD(ArithmeticTarget::A)),
+            0x80 => Some(ADD(AS8::B)),
+            0x81 => Some(ADD(AS8::C)),
+            0x82 => Some(ADD(AS8::D)),
+            0x83 => Some(ADD(AS8::E)),
+            0x84 => Some(ADD(AS8::H)),
+            0x85 => Some(ADD(AS8::L)),
+            0x86 => Some(ADD(AS8::HLI)),
+            0x87 => Some(ADD(AS8::A)),
 
-            0xA8 => Some(XOR(ArithmeticTarget::B)),
-            0xA9 => Some(XOR(ArithmeticTarget::C)),
-            0xAA => Some(XOR(ArithmeticTarget::D)),
-            0xAB => Some(XOR(ArithmeticTarget::E)),
-            0xAC => Some(XOR(ArithmeticTarget::H)),
-            0xAD => Some(XOR(ArithmeticTarget::L)),
-            0xAE => Some(XOR(ArithmeticTarget::HLI)),
-            0xAF => Some(XOR(ArithmeticTarget::A)),
+            0xA8 => Some(XOR(AS8::B)),
+            0xA9 => Some(XOR(AS8::C)),
+            0xAA => Some(XOR(AS8::D)),
+            0xAB => Some(XOR(AS8::E)),
+            0xAC => Some(XOR(AS8::H)),
+            0xAD => Some(XOR(AS8::L)),
+            0xAE => Some(XOR(AS8::HLI)),
+            0xAF => Some(XOR(AS8::A)),
+
+            0xB0 => Some(OR(AS8::B)),
+            0xB1 => Some(OR(AS8::C)),
+            0xB2 => Some(OR(AS8::D)),
+            0xB3 => Some(OR(AS8::E)),
+            0xB4 => Some(OR(AS8::H)),
+            0xB5 => Some(OR(AS8::L)),
+            0xB6 => Some(OR(AS8::HLI)),
+            0xB7 => Some(OR(AS8::A)),
 
             0xC0 => Some(RET(JumpTest::NotZero)),
             0xC1 => Some(POP(StackTarget::BC)),
@@ -352,13 +363,14 @@ impl Instruction {
             0xEB => None,
             0xEC => None,
             0xED => None,
-            0xEE => Some(XOR(ArithmeticTarget::D8)),
+            0xEE => Some(XOR(AS8::D8)),
             // 0xE8 => Some(ADDSP(ArithmeticTarget::D8)),
             0xE9 => Some(JPHL),
 
             0xF1 => Some(POP(StackTarget::AF)),
             0xF4 => None,
             0xF5 => Some(PUSH(StackTarget::AF)),
+            0xF6 => Some(OR(AS8::D8)),
 
             0xF9 => Some(LD(LT::Word(LWT::SP, LWS::HL))),
             0xFC => None,
