@@ -14,7 +14,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         DEC(value) => dec(cpu, value),
         HALT => cpu.pc,
         INC(value) => inc(cpu, value),
-        JP(test) => jump(cpu, test),
+        JP(test) => jp(cpu, test),
         JPHL => cpu.reg.get_hl(),
         JR => cpu.alu_jr(),
         JRIF(condition) => jr_if(cpu, condition),
@@ -139,7 +139,7 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
 }
 
 /// Jumps to the address given by the next 2 bytes if the condition is met.
-fn jump(cpu: &CPU, test: JumpCondition) -> u16 {
+fn jp(cpu: &CPU, test: JumpCondition) -> u16 {
     if cpu.test_jump_condition(test) {
         // Game Boy is little endian so read pc + 2 as most significant byte
         // and pc + 1 as least significant byte
@@ -172,7 +172,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
     use LoadByteTarget as LBT;
 
     match load_type {
-        LoadType::Byte(value, source) => {
+        LoadType::Byte(target, source) => {
             let source_value = match source {
                 LBS::A => cpu.reg.a,
                 LBS::B => cpu.reg.a,
@@ -184,7 +184,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LBS::D8 => cpu.read_next_byte(),
                 LBS::HLI => cpu.read_byte_hl(),
             };
-            match value {
+            match target {
                 LBT::A => cpu.reg.a = source_value,
                 LBT::B => cpu.reg.b = source_value,
                 LBT::C => cpu.reg.c = source_value,
@@ -194,27 +194,33 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LBT::L => cpu.reg.l = source_value,
                 LBT::HLI => cpu.bus.write_byte(cpu.reg.get_hl(), source_value),
             };
-            match source {
-                LBS::D8 => cpu.pc.wrapping_add(2),
-                _ => cpu.pc.wrapping_add(2),
-            }
+            cpu.pc.wrapping_add(match source {
+                LBS::D8 => 2,
+                _ => 1,
+            })
         }
-        LoadType::Word(value, source) => {
+        LoadType::Word(target, source) => {
             let source_value = match source {
                 LoadWordSource::D16 => cpu.read_next_word(),
-                _ => panic!("LoadWordSource not implemented"),
+                LoadWordSource::HL => cpu.reg.get_hl(),
+                LoadWordSource::SP => cpu.sp,
             };
-            match value {
+            match target {
                 LoadWordTarget::HL => cpu.reg.set_hl(source_value),
-                _ => panic!("LoadWordTarget not implemented"),
+                LoadWordTarget::BC => cpu.reg.set_bc(source_value),
+                LoadWordTarget::DE => cpu.reg.set_de(source_value),
+                LoadWordTarget::SP => cpu.sp = source_value,
+                LoadWordTarget::A16 => {
+                    let addr = cpu.read_next_word();
+                    cpu.bus.write_byte(addr, cpu.sp as u8);
+                    cpu.bus.write_byte(addr + 1, (cpu.sp >> 8) as u8);
+                },
             };
-            match source {
-                LoadWordSource::D16 => cpu.pc.wrapping_add(3),
-                _ => panic!("LoadWord length not implemented"),
-            }
+            cpu.pc.wrapping_add(3)
         }
-        LoadType::IndirectFromA(value) => {
-            match value {
+        LoadType::IndirectFromA(target) => {
+            let mut length = 1;
+            match target {
                 LoadIndirect::BC => cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a),
                 LoadIndirect::DE => cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a),
                 LoadIndirect::HLinc => {
@@ -227,12 +233,23 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                     cpu.bus.write_byte(hl, cpu.reg.a);
                     cpu.reg.set_hl(hl.wrapping_sub(1));
                 }
-                LoadIndirect::HL => todo!(),
-                LoadIndirect::D8 => todo!(),
-                LoadIndirect::D16 => todo!(),
-                LoadIndirect::C => todo!(),
+                LoadIndirect::HL => cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a),
+                LoadIndirect::A8 => {
+                    let addr = 0xFF00 | (cpu.read_next_byte() as u16);
+                    cpu.bus.write_byte(addr, cpu.reg.a);
+                    length = 2;
+                },
+                LoadIndirect::A16 => {
+                    let addr = cpu.read_next_word();
+                    cpu.bus.write_byte(addr, cpu.reg.a);
+                    length = 3;
+                },
+                LoadIndirect::C => {
+                    let addr = 0xFF00 | (cpu.reg.c as u16);
+                    cpu.bus.write_byte(addr, cpu.reg.a);
+                },
             }
-            cpu.pc.wrapping_add(1)
+            cpu.pc.wrapping_add(length)
         }
         LoadType::AFromIndirect(_) => todo!(),
     }
