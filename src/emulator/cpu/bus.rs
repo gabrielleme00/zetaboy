@@ -13,16 +13,16 @@ impl MemoryBus {
         Self { memory }
     }
 
-    /// Reads a byte from the `address`.
+    /// Returns a byte from the `address`.
     pub fn read_byte(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
 
-    /// Reads 2 bytes from the `address`.
+    /// Returns 2 bytes from the `address` (little-endian).
     pub fn read_word(&self, address: u16) -> u16 {
-        let a = (self.read_byte(address) as u16) << 8;
+        let a = self.read_byte(address) as u16;
         let b = self.read_byte(address + 1) as u16;
-        (a << 8) | b
+        (b << 8) | a
     }
 
     /// Writes a byte of `value` to the `address`.
