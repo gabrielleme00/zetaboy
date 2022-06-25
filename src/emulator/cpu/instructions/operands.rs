@@ -81,7 +81,7 @@ pub enum LoadWordTarget {
     DE,
     HL,
     SP,
-    D16I,
+    A16,
 }
 
 pub enum LoadWordSource {
@@ -96,8 +96,8 @@ pub enum LoadIndirect {
     HL,
     HLinc,
     HLdec,
-    D8,
-    D16,
+    A8,
+    A16,
     C,
 }
 

@@ -78,7 +78,7 @@ impl Instruction {
             0x05 => Some(DEC(IncDecSource::B)),
             0x06 => Some(LD(LT::Byte(LBT::B, LBS::D8))),
             0x07 => Some(RLCA),
-            0x08 => Some(LD(LT::Word(LWT::D16I, LWS::SP))),
+            0x08 => Some(LD(LT::Word(LWT::A16, LWS::SP))),
             0x09 => Some(ADDHL(AS16::BC)),
             0x0A => Some(LD(LT::AFromIndirect(LI::BC))),
             0x0B => Some(DEC(IncDecSource::BC)),
@@ -261,7 +261,7 @@ impl Instruction {
             0xDC => Some(CALL(JumpCondition::Flag(FlagCondition::Carry))),
             0xDD => None,
 
-            0xE0 => Some(LD(LT::IndirectFromA(LI::D8))),
+            0xE0 => Some(LD(LT::IndirectFromA(LI::A8))),
             0xE1 => Some(POP(StackTarget::HL)),
             0xE2 => Some(LD(LT::IndirectFromA(LI::C))),
             0xE3 => None,
@@ -273,7 +273,7 @@ impl Instruction {
             0xEE => Some(XOR(AS8::D8)),
             // 0xE8 => Some(ADDSP(ArithmeticTarget::D8)),
             0xE9 => Some(JPHL),
-            0xEA => Some(LD(LT::IndirectFromA(LI::D16))),
+            0xEA => Some(LD(LT::IndirectFromA(LI::A16))),
 
             0xF1 => Some(POP(StackTarget::AF)),
             0xF4 => None,
