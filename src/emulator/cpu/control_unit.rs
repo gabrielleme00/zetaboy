@@ -29,6 +29,8 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         RLCA => rlca(cpu),
         RRA => rra(cpu),
         RRCA => rrca(cpu),
+        SBC(source) => sbc(cpu, source),
+        SUB(source) => sub(cpu, source),
         XOR(value) => xor(cpu, value),
         CP(value) => cp(cpu, value),
         // _ => cpu.pc, /* TODO: support more instructions */
@@ -57,6 +59,44 @@ fn adc(cpu: &mut CPU, source: AS8) -> u16 {
 fn add(cpu: &mut CPU, source: AS8) -> u16 {
     let mut length = 1;
     cpu.alu_add(match source {
+        AS8::A => cpu.reg.a,
+        AS8::B => cpu.reg.b,
+        AS8::C => cpu.reg.c,
+        AS8::D => cpu.reg.d,
+        AS8::E => cpu.reg.e,
+        AS8::H => cpu.reg.h,
+        AS8::L => cpu.reg.l,
+        AS8::HLI => cpu.read_byte_hl(),
+        AS8::D8 => {
+            length = 2;
+            cpu.read_next_byte()
+        },
+    });
+    cpu.pc.wrapping_add(length)
+}
+
+fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
+    let mut length = 1;
+    cpu.alu_sbc(match source {
+        AS8::A => cpu.reg.a,
+        AS8::B => cpu.reg.b,
+        AS8::C => cpu.reg.c,
+        AS8::D => cpu.reg.d,
+        AS8::E => cpu.reg.e,
+        AS8::H => cpu.reg.h,
+        AS8::L => cpu.reg.l,
+        AS8::HLI => cpu.read_byte_hl(),
+        AS8::D8 => {
+            length = 2;
+            cpu.read_next_byte()
+        },
+    });
+    cpu.pc.wrapping_add(length)
+}
+
+fn sub(cpu: &mut CPU, source: AS8) -> u16 {
+    let mut length = 1;
+    cpu.alu_sub(match source {
         AS8::A => cpu.reg.a,
         AS8::B => cpu.reg.b,
         AS8::C => cpu.reg.c,
