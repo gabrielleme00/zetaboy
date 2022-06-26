@@ -89,6 +89,18 @@ impl CPU {
     // TODO: create a separate module for the ALU
 
     /// Adds `value` to the A register (accumulator).
+    fn alu_adc(&mut self, value: u8) {
+        let a = self.reg.a;
+        let c = self.reg.c as u8;
+        let new_value = a.wrapping_add(value).wrapping_add(c);
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = (a & 0xF) + (value & 0xF) + (c & 0xF) > 0xF;
+        self.reg.f.c = (a as u16) + (value as u16) + (c as u16) > 0xFF;
+        self.reg.a = new_value;
+    }
+
+    /// Adds `value` to the A register (accumulator).
     fn alu_add(&mut self, value: u8) {
         let (new_value, overflow) = self.reg.a.overflowing_add(value);
         self.reg.f.z = new_value == 0;

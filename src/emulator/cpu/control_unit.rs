@@ -8,6 +8,7 @@ use ArithmeticSource16 as AS16;
 pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     use Instruction::*;
     match instruction {
+        ADC(source) => adc(cpu, source),
         ADD(source) => add(cpu, source),
         ADDHL(value) => add_hl(cpu, value),
         CALL(test) => call(cpu, test),
@@ -32,6 +33,25 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         CP(value) => cp(cpu, value),
         // _ => cpu.pc, /* TODO: support more instructions */
     }
+}
+
+fn adc(cpu: &mut CPU, source: AS8) -> u16 {
+    let mut length = 1;
+    cpu.alu_adc(match source {
+        AS8::A => cpu.reg.a,
+        AS8::B => cpu.reg.b,
+        AS8::C => cpu.reg.c,
+        AS8::D => cpu.reg.d,
+        AS8::E => cpu.reg.e,
+        AS8::H => cpu.reg.h,
+        AS8::L => cpu.reg.l,
+        AS8::HLI => cpu.read_byte_hl(),
+        AS8::D8 => {
+            length = 2;
+            cpu.read_next_byte()
+        },
+    });
+    cpu.pc.wrapping_add(length)
 }
 
 fn add(cpu: &mut CPU, source: AS8) -> u16 {

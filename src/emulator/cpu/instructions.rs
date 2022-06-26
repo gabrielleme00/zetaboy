@@ -3,7 +3,7 @@ mod operands;
 pub use operands::*;
 
 pub enum Instruction {
-    // ADC,
+    ADC(ArithmeticSource8),
     ADD(ArithmeticSource8),
     ADDHL(ArithmeticSource16),
     // ADDSP(ArithmeticTarget),
@@ -214,6 +214,14 @@ impl Instruction {
             0x85 => S(ADD(AS8::L)),
             0x86 => S(ADD(AS8::HLI)),
             0x87 => S(ADD(AS8::A)),
+            0x88 => S(ADC(AS8::B)),
+            0x89 => S(ADC(AS8::C)),
+            0x8A => S(ADC(AS8::D)),
+            0x8B => S(ADC(AS8::E)),
+            0x8C => S(ADC(AS8::H)),
+            0x8D => S(ADC(AS8::L)),
+            0x8E => S(ADC(AS8::HLI)),
+            0x8F => S(ADC(AS8::A)),
 
             0xA8 => S(XOR(AS8::B)),
             0xA9 => S(XOR(AS8::C)),
@@ -253,6 +261,7 @@ impl Instruction {
             0xCA => S(JP(JC::Flag(FC::Zero))),
             0xCC => S(CALL(JC::Flag(FC::Zero))),
             0xCD => S(CALL(JC::Always)),
+            0xCE => S(ADC(AS8::D8)),
 
             0xD0 => S(RET(JC::Flag(FC::NotCarry))),
             0xD1 => S(POP(ST::DE)),
