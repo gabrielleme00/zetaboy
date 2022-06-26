@@ -8,7 +8,7 @@ use ArithmeticSource16 as AS16;
 pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     use Instruction::*;
     match instruction {
-        ADD(value) => add(cpu, value),
+        ADD(source) => add(cpu, source),
         ADDHL(value) => add_hl(cpu, value),
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
@@ -34,22 +34,22 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     }
 }
 
-fn add(cpu: &mut CPU, value: AS8) -> u16 {
+fn add(cpu: &mut CPU, source: AS8) -> u16 {
     let mut length = 1;
-    match value {
-        AS8::A => cpu.alu_add(cpu.reg.a),
-        AS8::B => cpu.alu_add(cpu.reg.b),
-        AS8::C => cpu.alu_add(cpu.reg.c),
-        AS8::D => cpu.alu_add(cpu.reg.d),
-        AS8::E => cpu.alu_add(cpu.reg.e),
-        AS8::H => cpu.alu_add(cpu.reg.h),
-        AS8::L => cpu.alu_add(cpu.reg.l),
-        AS8::HLI => cpu.alu_add(cpu.read_byte_hl()),
+    cpu.alu_add(match source {
+        AS8::A => cpu.reg.a,
+        AS8::B => cpu.reg.b,
+        AS8::C => cpu.reg.c,
+        AS8::D => cpu.reg.d,
+        AS8::E => cpu.reg.e,
+        AS8::H => cpu.reg.h,
+        AS8::L => cpu.reg.l,
+        AS8::HLI => cpu.read_byte_hl(),
         AS8::D8 => {
-            cpu.alu_add(cpu.read_next_byte());
             length = 2;
+            cpu.read_next_byte()
         },
-    };
+    });
     cpu.pc.wrapping_add(length)
 }
 
