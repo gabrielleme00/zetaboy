@@ -3,50 +3,66 @@ mod operands;
 pub use operands::*;
 
 pub enum Instruction {
-    ADC(ArithmeticSource8),
-    ADD(ArithmeticSource8),
-    ADDHL(ArithmeticSource16),
-    // ADDSP(ArithmeticTarget),
-    // AND,
-    // BIT,
-    CALL(JumpCondition),
-    // CCF,
-    CP(ArithmeticSource8),
-    // CPL,
-    DEC(IncDecSource),
-    // DI,
+    // Control (misc)
+    NOP,
+    // STOP,
     HALT,
-    INC(IncDecSource),
+    // DI
+    // EI
+
+    // Control (branch)
     JP(JumpCondition),
     JPHL,
     JR,
     JRIF(FlagCondition),
-    LD(LoadType),
-    NOP,
-    OR(ArithmeticSource8),
-    POP(StackTarget),
-    PUSH(StackTarget),
+    CALL(JumpCondition),
     RET(JumpCondition),
     // RETI,
     // RST,
-    // RL,
-    // RLA,
-    // RLC,
-    // RR,
+
+    // ALU (8-bit)
+    ADD(ArithmeticSource8),
+    ADC(ArithmeticSource8),
+    SUB(ArithmeticSource8),
+    SBC(ArithmeticSource8),
+    // AND,
+    XOR(ArithmeticSource8),
+    OR(ArithmeticSource8),
+    CP(ArithmeticSource8),
+    // DAA,
+    // SCF,
+    // CPL,
+    // CCF,
+
+    // ALU (16-bit)
+    ADDHL(ArithmeticSource16),
+    // ADDSP,
+
+    // LSM (8-bit)
+
+    // LSM (16-bit)
+    POP(StackTarget),
+    PUSH(StackTarget),
+
+    // RSB (8-bit)
     RLCA,
     RLA,
     RRCA,
     RRA,
-    SBC(ArithmeticSource8),
-    // SCF,
+    // BIT,
+    // RLC,
+    // RL,
+    // RR,
     // SET,
     // SLA,
     // SRA,
     // SRL,
-    // STOP,
-    SUB(ArithmeticSource8),
     // SWAP,
-    XOR(ArithmeticSource8),
+
+    // TODO: change param types
+    INC(IncDecSource),
+    DEC(IncDecSource),
+    LD(LoadType),
 }
 
 impl Instruction {
