@@ -1,7 +1,13 @@
+mod gpu;
+
+use core::panic;
+use gpu::*;
+
 const MEMORY_SIZE: usize = 0xFFFF;
 
 pub struct MemoryBus {
     memory: [u8; MEMORY_SIZE],
+    gpu: GPU,
 }
 
 impl MemoryBus {
@@ -10,12 +16,20 @@ impl MemoryBus {
         for i in 0..cart_data.len() {
             memory[i] = cart_data[i];
         }
-        Self { memory }
+        Self {
+            memory,
+            gpu: GPU::new(),
+        }
     }
 
     /// Returns a byte from the `address`.
     pub fn read_byte(&self, address: u16) -> u8 {
-        self.memory[address as usize]
+        let address = address as usize;
+        match address {
+            0..=0x3FFF => self.memory[address],
+            VRAM_BEGIN..=VRAM_END => self.gpu.read_vram(address - VRAM_BEGIN),
+            _ => panic!("TODO: support other areas of memory"),
+        }
     }
 
     /// Returns 2 bytes from the `address` (little-endian).
@@ -27,6 +41,11 @@ impl MemoryBus {
 
     /// Writes a byte of `value` to the `address`.
     pub fn write_byte(&mut self, address: u16, value: u8) {
-        self.memory[address as usize] = value;
+        let address = address as usize;
+        match address {
+            0..=0x3FFF => self.memory[address] = value,
+            VRAM_BEGIN..=VRAM_END => self.gpu.write_vram(address - VRAM_BEGIN, value),
+            _ => panic!("TODO: support other areas of memory"),
+        };
     }
 }
