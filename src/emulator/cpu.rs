@@ -10,8 +10,6 @@ use registers::*;
 pub struct CPU {
     reg: Registers,
     bus: MemoryBus,
-    pc: u16, // Program Counter
-    sp: u16, // Stack Pointer
     halted: bool,
     _stepping: bool,
 }
@@ -21,8 +19,6 @@ impl CPU {
         Self {
             reg: Registers::new(),
             bus: MemoryBus::new(cart_data),
-            pc: 0x100,
-            sp: 0,
             halted: false,
             _stepping: false,
         }
@@ -34,25 +30,28 @@ impl CPU {
             return Ok(());
         }
 
-        let mut opcode = self.bus.read_byte(self.pc);
+        let mut opcode = self.bus.read_byte(self.reg.pc);
         let prefixed = opcode == 0xCB;
         if prefixed {
             opcode = self.read_next_byte();
         }
         let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
-            let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-            println!("Executing: [{:#04X}] -> {}", self.pc, description);
+            // let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
+            // println!("Executing: [{:#04X}] -> {}", self.reg.pc, description);
+            if self.reg.pc == 0x2817 {
+                println!("teste");
+            }
             control_unit::execute(self, instruction)
         } else {
             let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
             println!(
                 "Unknown instruction found for: [{:#04X}] -> {}",
-                self.pc, description
+                self.reg.pc, description
             );
             return Err("Unknown instruction");
         };
 
-        self.pc = next_pc;
+        self.reg.pc = next_pc;
 
         Ok(())
     }
@@ -61,12 +60,12 @@ impl CPU {
 
     /// Returns the next 1 byte.
     fn read_next_byte(&self) -> u8 {
-        self.bus.read_byte(self.pc + 1)
+        self.bus.read_byte(self.reg.pc + 1)
     }
 
     /// Returns the next 2 bytes.
     fn read_next_word(&self) -> u16 {
-        self.bus.read_word(self.pc + 1)
+        self.bus.read_word(self.reg.pc + 1)
     }
 
     /// Returns the byte pointed by the `HL` register
@@ -155,7 +154,7 @@ impl CPU {
     /// Adds the immediate next byte value to the current address and jumps
     /// to it.
     fn alu_jr(&mut self) -> u16 {
-        let pc = self.pc as i32;
+        let pc = self.reg.pc as i32;
         let value = (self.read_next_byte() as i8) as i32;
         (pc + value + 2) as u16
     }
@@ -238,24 +237,24 @@ impl CPU {
 
     /// Pops the last value from the stack.
     fn alu_pop(&mut self) -> u16 {
-        let lsb = self.bus.read_byte(self.sp) as u16;
-        self.sp = self.sp.wrapping_add(1);
+        let lsb = self.bus.read_byte(self.reg.sp) as u16;
+        self.reg.sp = self.reg.sp.wrapping_add(1);
 
-        let msb = self.bus.read_byte(self.sp) as u16;
-        self.sp = self.sp.wrapping_add(1);
+        let msb = self.bus.read_byte(self.reg.sp) as u16;
+        self.reg.sp = self.reg.sp.wrapping_add(1);
 
         (msb << 8) | lsb
     }
 
     /// Pushes a `value` to the top of the stack.
     fn alu_push(&mut self, value: u16) -> u16 {
-        self.sp = self.sp.wrapping_sub(1);
-        self.bus.write_byte(self.sp, (value >> 8) as u8);
+        self.reg.sp = self.reg.sp.wrapping_sub(1);
+        self.bus.write_byte(self.reg.sp, (value >> 8) as u8);
 
-        self.sp = self.sp.wrapping_sub(1);
-        self.bus.write_byte(self.sp, (value & 0xFF) as u8);
+        self.reg.sp = self.reg.sp.wrapping_sub(1);
+        self.bus.write_byte(self.reg.sp, (value & 0xFF) as u8);
 
-        self.pc.wrapping_add(1)
+        self.reg.pc.wrapping_add(1)
     }
 
     /// XORs `value` to the A register (accumulator).

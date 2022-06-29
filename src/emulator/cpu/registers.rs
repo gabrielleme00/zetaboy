@@ -15,6 +15,8 @@ pub struct Registers {
     pub f: FlagsRegister,
     pub h: u8,
     pub l: u8,
+    pub pc: u16, // Program Counter
+    pub sp: u16, // Stack Pointer
 }
 
 #[derive(Default, Copy, Clone)]
@@ -36,6 +38,8 @@ impl Registers {
             f: Default::default(),
             h: 0,
             l: 0,
+            pc: 0x100,
+            sp: 0xFFFE,
         }
     }
 

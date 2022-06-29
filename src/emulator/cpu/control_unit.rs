@@ -13,14 +13,14 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         ADDHL(value) => add_hl(cpu, value),
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
-        HALT => cpu.pc,
+        HALT => cpu.reg.pc,
         INC(value) => inc(cpu, value),
         JP(test) => jp(cpu, test),
         JPHL => cpu.reg.get_hl(),
         JR => cpu.alu_jr(),
         JRIF(condition) => jr_if(cpu, condition),
         LD(load_type) => ld(cpu, load_type),
-        NOP => cpu.pc.wrapping_add(1),
+        NOP => cpu.reg.pc.wrapping_add(1),
         OR(value) => or(cpu, value),
         POP(value) => pop(cpu, value),
         PUSH(value) => push(cpu, value),
@@ -33,7 +33,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         SUB(source) => sub(cpu, source),
         XOR(value) => xor(cpu, value),
         CP(value) => cp(cpu, value),
-        // _ => cpu.pc, /* TODO: support more instructions */
+        // _ => cpu.reg.pc, /* TODO: support more instructions */
     }
 }
 
@@ -53,7 +53,7 @@ fn adc(cpu: &mut CPU, source: AS8) -> u16 {
             cpu.read_next_byte()
         },
     });
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn add(cpu: &mut CPU, source: AS8) -> u16 {
@@ -72,7 +72,7 @@ fn add(cpu: &mut CPU, source: AS8) -> u16 {
             cpu.read_next_byte()
         },
     });
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
@@ -91,7 +91,7 @@ fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
             cpu.read_next_byte()
         },
     });
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn sub(cpu: &mut CPU, source: AS8) -> u16 {
@@ -110,7 +110,7 @@ fn sub(cpu: &mut CPU, source: AS8) -> u16 {
             cpu.read_next_byte()
         },
     });
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
@@ -118,13 +118,13 @@ fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
         AS16::BC => cpu.alu_add_hl(cpu.reg.get_bc()),
         AS16::DE => cpu.alu_add_hl(cpu.reg.get_de()),
         AS16::HL => cpu.alu_add_hl(cpu.reg.get_hl()),
-        AS16::SP => cpu.alu_add_hl(cpu.sp),
+        AS16::SP => cpu.alu_add_hl(cpu.reg.sp),
     };
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn call(cpu: &mut CPU, test: JumpCondition) -> u16 {
-    let next_pc = cpu.pc.wrapping_add(3);
+    let next_pc = cpu.reg.pc.wrapping_add(3);
     if cpu.test_jump_condition(test) {
         cpu.alu_push(next_pc);
         cpu.read_next_word()
@@ -149,7 +149,7 @@ fn cp(cpu: &mut CPU, source: AS8) -> u16 {
             cpu.read_next_byte()
         },
     });
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
@@ -170,9 +170,9 @@ fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_sub(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_sub(1)),
         IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_sub(1)),
-        IDS::SP => cpu.sp = cpu.sp.wrapping_sub(1),
+        IDS::SP => cpu.reg.sp = cpu.reg.sp.wrapping_sub(1),
     }
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
@@ -193,9 +193,9 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_add(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_add(1)),
         IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_add(1)),
-        IDS::SP => cpu.sp = cpu.sp.wrapping_add(1),
+        IDS::SP => cpu.reg.sp = cpu.reg.sp.wrapping_add(1),
     }
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 /// Jumps to the address given by the next 2 bytes if the condition is met.
@@ -203,12 +203,12 @@ fn jp(cpu: &CPU, test: JumpCondition) -> u16 {
     if cpu.test_jump_condition(test) {
         // Game Boy is little endian so read pc + 2 as most significant byte
         // and pc + 1 as least significant byte
-        let least_significant_byte = cpu.bus.read_byte(cpu.pc + 1) as u16;
-        let most_significant_byte = cpu.bus.read_byte(cpu.pc + 2) as u16;
+        let least_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 1) as u16;
+        let most_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 2) as u16;
         (most_significant_byte << 8) | least_significant_byte
     } else {
         // Jump instructions are always 3 bytes wide
-        cpu.pc.wrapping_add(3)
+        cpu.reg.pc.wrapping_add(3)
     }
 }
 
@@ -217,7 +217,7 @@ fn jr_if(cpu: &mut CPU, condition: FlagCondition) -> u16 {
     if cpu.test_flag_condition(condition) {
         cpu.alu_jr()
     } else {
-        cpu.pc.wrapping_add(2)
+        cpu.reg.pc.wrapping_add(2)
     }
 }
 
@@ -249,7 +249,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LBT::L => cpu.reg.l = source_value,
                 LBT::HLI => cpu.bus.write_byte(cpu.reg.get_hl(), source_value),
             };
-            cpu.pc.wrapping_add(match source {
+            cpu.reg.pc.wrapping_add(match source {
                 LBS::D8 => 2,
                 _ => 1,
             })
@@ -258,20 +258,20 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             let source_value = match source {
                 LoadWordSource::D16 => cpu.read_next_word(),
                 LoadWordSource::HL => cpu.reg.get_hl(),
-                LoadWordSource::SP => cpu.sp,
+                LoadWordSource::SP => cpu.reg.sp,
             };
             match target {
                 LoadWordTarget::HL => cpu.reg.set_hl(source_value),
                 LoadWordTarget::BC => cpu.reg.set_bc(source_value),
                 LoadWordTarget::DE => cpu.reg.set_de(source_value),
-                LoadWordTarget::SP => cpu.sp = source_value,
+                LoadWordTarget::SP => cpu.reg.sp = source_value,
                 LoadWordTarget::A16 => {
                     let addr = cpu.read_next_word();
-                    cpu.bus.write_byte(addr, cpu.sp as u8);
-                    cpu.bus.write_byte(addr + 1, (cpu.sp >> 8) as u8);
+                    cpu.bus.write_byte(addr, cpu.reg.sp as u8);
+                    cpu.bus.write_byte(addr + 1, (cpu.reg.sp >> 8) as u8);
                 },
             };
-            cpu.pc.wrapping_add(3)
+            cpu.reg.pc.wrapping_add(3)
         }
         LoadType::IndirectFromA(target) => {
             let mut length = 1;
@@ -304,7 +304,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                     cpu.bus.write_byte(addr, cpu.reg.a);
                 },
             }
-            cpu.pc.wrapping_add(length)
+            cpu.reg.pc.wrapping_add(length)
         }
         LoadType::AFromIndirect(_) => todo!(),
     }
@@ -326,7 +326,7 @@ fn or(cpu: &mut CPU, value: AS8) -> u16 {
             length = 2;
         }
     };
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
 
 fn pop(cpu: &mut CPU, value: StackTarget) -> u16 {
@@ -338,7 +338,7 @@ fn pop(cpu: &mut CPU, value: StackTarget) -> u16 {
         ST::DE => cpu.reg.set_de(result),
         ST::HL => cpu.reg.set_hl(result),
     }
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn push(cpu: &mut CPU, value: StackTarget) -> u16 {
@@ -355,32 +355,32 @@ fn ret(cpu: &mut CPU, test: JumpCondition) -> u16 {
     if cpu.test_jump_condition(test) {
         cpu.alu_pop()
     } else {
-        cpu.pc.wrapping_add(1)
+        cpu.reg.pc.wrapping_add(1)
     }
 }
 
 fn rla(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rl(cpu.reg.a);
     cpu.reg.f.z = false;
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn rlca(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rlc(cpu.reg.a);
     cpu.reg.f.z = false;
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn rra(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rr(cpu.reg.a);
     cpu.reg.f.z = false;
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn rrca(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rrc(cpu.reg.a);
     cpu.reg.f.z = false;
-    cpu.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn xor(cpu: &mut CPU, value: AS8) -> u16 {
@@ -399,5 +399,5 @@ fn xor(cpu: &mut CPU, value: AS8) -> u16 {
             length = 2;
         }
     };
-    cpu.pc.wrapping_add(length)
+    cpu.reg.pc.wrapping_add(length)
 }
