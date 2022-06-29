@@ -214,12 +214,7 @@ fn jp(cpu: &CPU, test: JumpCondition) -> u16 {
 
 /// Executes JR if a flag condition is met.
 fn jr_if(cpu: &mut CPU, condition: FlagCondition) -> u16 {
-    if match condition {
-        FlagCondition::Carry => cpu.reg.f.c,
-        FlagCondition::Zero => cpu.reg.f.z,
-        FlagCondition::NotCarry => !cpu.reg.f.c,
-        FlagCondition::NotZero => !cpu.reg.f.z,
-    } {
+    if cpu.test_flag_condition(condition) {
         cpu.alu_jr()
     } else {
         cpu.pc.wrapping_add(2)

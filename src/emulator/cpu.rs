@@ -74,14 +74,21 @@ impl CPU {
         self.bus.read_byte(self.reg.get_hl())
     }
 
+    /// Evaluates the flag condition and returns a boolean result.
+    fn test_flag_condition(&self, test: FlagCondition) -> bool {
+        match test {
+            FlagCondition::Zero => self.reg.f.z,
+            FlagCondition::NotZero => !self.reg.f.z,
+            FlagCondition::Carry => self.reg.f.c,
+            FlagCondition::NotCarry => !self.reg.f.c,
+        }
+    }
+
     /// Evaluates the jump condition and returns a boolean result.
     fn test_jump_condition(&self, test: JumpCondition) -> bool {
         match test {
             JumpCondition::Always => true,
-            JumpCondition::Flag(FlagCondition::Zero) => self.reg.f.z,
-            JumpCondition::Flag(FlagCondition::NotZero) => !self.reg.f.z,
-            JumpCondition::Flag(FlagCondition::Carry) => self.reg.f.c,
-            JumpCondition::Flag(FlagCondition::NotCarry) => !self.reg.f.c,
+            JumpCondition::Flag(fc) => self.test_flag_condition(fc),
         }
     }
 
@@ -148,7 +155,9 @@ impl CPU {
     /// Adds the immediate next byte value to the current address and jumps
     /// to it.
     fn alu_jr(&mut self) -> u16 {
-        ((self.pc as i32) + (self.read_next_byte() as i32)) as u16
+        let pc = self.pc as i32;
+        let value = (self.read_next_byte() as i8) as i32;
+        (pc + value + 2) as u16
     }
 
     /// Rotates A to the left through Carry flag.
