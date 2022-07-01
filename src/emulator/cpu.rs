@@ -38,10 +38,10 @@ impl CPU {
             opcode = self.read_next_byte();
         }
         let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
-            // let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-            // println!("Executing: [{:#04X}] -> {}", self.reg.pc, description);
-            if self.reg.pc == 0x2817 {
-                println!("teste");
+            if self.reg.pc == 0x237 {
+                let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
+                println!("Executing: [{:#04X}] -> {}", self.reg.pc, description);
+                println!("A: {}", self.reg.a);
             }
             control_unit::execute(self, instruction)
         } else {

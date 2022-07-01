@@ -3,7 +3,7 @@ mod gpu;
 use core::panic;
 use gpu::*;
 
-const MEMORY_SIZE: usize = 0xFFFF;
+const MEMORY_SIZE: usize = 0x10000;
 const ROM_BANK_0_BEGIN: usize = 0x0000;
 const ROM_BANK_0_END: usize = 0x7FFF;
 const WRAM_BEGIN: usize = 0xC000;
@@ -33,6 +33,7 @@ impl MemoryBus {
             ROM_BANK_0_BEGIN..=ROM_BANK_0_END => self.memory[address],
             VRAM_BEGIN..=VRAM_END => self.gpu.read_vram(address - VRAM_BEGIN),
             WRAM_BEGIN..=WRAM_END => self.memory[address],
+            0xFF00..=0xFFFF => self.memory[address],
             _ => panic!("TODO: support other areas of memory"),
         }
     }
@@ -50,6 +51,7 @@ impl MemoryBus {
         match address {
             VRAM_BEGIN..=VRAM_END => self.gpu.write_vram(address - VRAM_BEGIN, value),
             WRAM_BEGIN..=WRAM_END => self.memory[address] = value,
+            0xFF00..=0xFFFF => self.memory[address] = value,
             _ => {
                 println!("Write: {:#04X} at {:#04X}", value, address);
                 panic!("TODO: support other areas of memory")

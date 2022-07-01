@@ -308,7 +308,22 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             }
             cpu.reg.pc.wrapping_add(length)
         }
-        LoadType::AFromIndirect(_) => todo!(),
+        LoadType::AFromIndirect(source) => {
+            let mut length = 1;
+            match source {
+                LoadIndirect::A8 => {
+                    let addr = 0xFF00 | (cpu.read_next_byte() as u16);
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                    length = 2;
+                },
+                LoadIndirect::C => {
+                    let addr = 0xFF00 | (cpu.reg.c as u16);
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                },
+                _ => todo!("Unknown AFromIndirect source"),
+            }
+            cpu.reg.pc.wrapping_add(length)
+        },
     }
 }
 
