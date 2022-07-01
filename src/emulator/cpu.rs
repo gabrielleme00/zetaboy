@@ -11,6 +11,7 @@ pub struct CPU {
     reg: Registers,
     bus: MemoryBus,
     halted: bool,
+    ei: bool,
     _stepping: bool,
 }
 
@@ -20,6 +21,7 @@ impl CPU {
             reg: Registers::new(),
             bus: MemoryBus::new(cart_data),
             halted: false,
+            ei: true,
             _stepping: false,
         }
     }

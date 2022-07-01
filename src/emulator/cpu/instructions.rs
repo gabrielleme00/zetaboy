@@ -7,8 +7,8 @@ pub enum Instruction {
     NOP,
     // STOP,
     HALT,
-    // DI
-    // EI
+    DI,
+    EI,
 
     // Control (branch)
     JP(JumpCondition),
@@ -323,10 +323,12 @@ impl Instruction {
             0xEA => S(LD(LT::IndirectFromA(LI::A16))),
 
             0xF1 => S(POP(ST::AF)),
+            0xF3 => S(DI),
             0xF4 => None,
             0xF5 => S(PUSH(ST::AF)),
             0xF6 => S(OR(AS8::D8)),
             0xF9 => S(LD(LT::Word(LWT::SP, LWS::HL))),
+            0xFB => S(EI),
             0xFC => None,
             0xFD => None,
             0xFE => S(CP(AS8::D8)),

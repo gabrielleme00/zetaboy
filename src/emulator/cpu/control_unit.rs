@@ -13,6 +13,8 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         ADDHL(value) => add_hl(cpu, value),
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
+        DI => set_ei(cpu, false),
+        DE => set_ei(cpu, true),
         HALT => cpu.reg.pc,
         INC(value) => inc(cpu, value),
         JP(test) => jp(cpu, test),
@@ -380,6 +382,11 @@ fn rra(cpu: &mut CPU) -> u16 {
 fn rrca(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rrc(cpu.reg.a);
     cpu.reg.f.z = false;
+    cpu.reg.pc.wrapping_add(1)
+}
+
+fn set_ei(cpu: &mut CPU, value: bool) -> u16 {
+    cpu.ei = value;
     cpu.reg.pc.wrapping_add(1)
 }
 
