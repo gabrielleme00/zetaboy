@@ -14,7 +14,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         CALL(test) => call(cpu, test),
         DEC(value) => dec(cpu, value),
         DI => set_ei(cpu, false),
-        DE => set_ei(cpu, true),
+        EI => set_ei(cpu, true),
         HALT => cpu.reg.pc,
         INC(value) => inc(cpu, value),
         JP(test) => jp(cpu, test),
