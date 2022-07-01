@@ -47,6 +47,10 @@ impl Cart {
         println!("#----------------------#");
     }
 
+    pub fn get_title(&self) -> String {
+        self.header.title_to_string()
+    }
+
     fn is_checksum_valid(&self) -> bool {
         let mut x: u8 = 0;
         for i in 0x134..=0x14C {
