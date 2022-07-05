@@ -1,17 +1,14 @@
-mod gpu;
+mod regions;
 
 use core::panic;
-use gpu::*;
+use crate::emulator::ppu::*;
+use regions::*;
 
 const MEMORY_SIZE: usize = 0x10000;
-const ROM_BANK_0_BEGIN: usize = 0x0000;
-const ROM_BANK_0_END: usize = 0x7FFF;
-const WRAM_BEGIN: usize = 0xC000;
-const WRAM_END: usize = 0xDFFF;
 
 pub struct MemoryBus {
     memory: [u8; MEMORY_SIZE],
-    gpu: GPU,
+    ppu: PPU,
 }
 
 impl MemoryBus {
@@ -22,19 +19,25 @@ impl MemoryBus {
         }
         Self {
             memory,
-            gpu: GPU::new(),
+            ppu: PPU::new(),
         }
     }
 
     /// Returns a byte from the `address`.
     pub fn read_byte(&self, address: u16) -> u8 {
+        use MemoryRegion::*;
         let address = address as usize;
-        match address {
-            ROM_BANK_0_BEGIN..=ROM_BANK_0_END => self.memory[address],
-            VRAM_BEGIN..=VRAM_END => self.gpu.read_vram(address - VRAM_BEGIN),
-            WRAM_BEGIN..=WRAM_END => self.memory[address],
-            0xFF00..=0xFFFF => self.memory[address],
-            _ => panic!("TODO: support other areas of memory"),
+        match MemoryRegion::from_address(address) {
+            ROM => self.memory[address],
+            VRAM => self.ppu.read_vram(address),
+            CRAM => self.memory[address],
+            WRAM => todo!("Unsupported bus read: {:#04X} ({})", address, "WRAM"),
+            ECHO => 0,
+            OAM => todo!("Unsupported bus read: {:#04X} ({})", address, "OAM"),
+            RESERVED => 0,
+            IO => todo!("Unsupported bus read: {:#04X} ({})", address, "IO Regs"),
+            HRAM => todo!("Unsupported bus read: {:#04X} ({})", address, "HRAM"),
+            IER => todo!("Unsupported bus read: {:#04X} ({})", address, "IE"),
         }
     }
 
@@ -47,15 +50,19 @@ impl MemoryBus {
 
     /// Writes a byte of `value` to the `address`.
     pub fn write_byte(&mut self, address: u16, value: u8) {
+        use MemoryRegion::*;
         let address = address as usize;
-        match address {
-            VRAM_BEGIN..=VRAM_END => self.gpu.write_vram(address - VRAM_BEGIN, value),
-            WRAM_BEGIN..=WRAM_END => self.memory[address] = value,
-            0xFF00..=0xFFFF => self.memory[address] = value,
-            _ => {
-                println!("Write: {:#04X} at {:#04X}", value, address);
-                panic!("TODO: support other areas of memory")
-            },
+        match MemoryRegion::from_address(address) {
+            ROM => self.memory[address] = value,
+            VRAM => self.ppu.write_vram(address, value),
+            CRAM => self.memory[address] = value,
+            WRAM => todo!("Unsupported bus write: {:#04X} ({})", address, "WRAM"),
+            ECHO => (),
+            OAM => todo!("Unsupported bus write: {:#04X} ({})", address, "OAM"),
+            RESERVED => (),
+            IO => todo!("Unsupported bus write: {:#04X} ({})", address, "IO Regs"),
+            HRAM => todo!("Unsupported bus write: {:#04X} ({})", address, "HRAM"),
+            IER => todo!("Unsupported bus write: {:#04X} ({})", address, "IE"),
         };
     }
 }

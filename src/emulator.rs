@@ -1,3 +1,4 @@
+pub mod ppu;
 mod cart;
 mod cpu;
 
