@@ -1,43 +1,45 @@
-mod regions;
-
-use core::panic;
 use crate::emulator::ppu::*;
-use regions::*;
 
-const MEMORY_SIZE: usize = 0x10000;
+const HRAM_SIZE: usize = 0x7F;
+const WRAM_SIZE: usize = 0x8000;
 
 pub struct MemoryBus {
-    memory: [u8; MEMORY_SIZE],
+    cart: Vec<u8>,
     ppu: PPU,
+    hram: [u8; HRAM_SIZE],
+    wram: [u8; WRAM_SIZE],
+    wram_bank: usize,
+    int_enable: u8,
 }
 
 impl MemoryBus {
     pub fn new(cart_data: &Vec<u8>) -> Self {
-        let mut memory = [0; MEMORY_SIZE];
-        for i in 0..cart_data.len() {
-            memory[i] = cart_data[i];
-        }
         Self {
-            memory,
+            cart: cart_data.to_vec(),
             ppu: PPU::new(),
+            hram: [0; HRAM_SIZE],
+            wram: [0; WRAM_SIZE],
+            wram_bank: 1,
+            int_enable: 0,
         }
     }
 
     /// Returns a byte from the `address`.
     pub fn read_byte(&self, address: u16) -> u8 {
-        use MemoryRegion::*;
         let address = address as usize;
-        match MemoryRegion::from_address(address) {
-            ROM => self.memory[address],
-            VRAM => self.ppu.read_vram(address),
-            CRAM => self.memory[address],
-            WRAM => todo!("Unsupported bus read: {:#04X} ({})", address, "WRAM"),
-            ECHO => 0,
-            OAM => todo!("Unsupported bus read: {:#04X} ({})", address, "OAM"),
-            RESERVED => 0,
-            IO => todo!("Unsupported bus read: {:#04X} ({})", address, "IO Regs"),
-            HRAM => todo!("Unsupported bus read: {:#04X} ({})", address, "HRAM"),
-            IER => todo!("Unsupported bus read: {:#04X} ({})", address, "IE"),
+        match address{
+            0x0000..=0x7FFF => self.cart[address],
+            0x8000..=0x9FFF => self.ppu.read_vram(address),
+            0xA000..=0xBFFF => self.cart[address],
+            0xC000..=0xCFFF => self.wram[address - 0xC000],
+            0xD000..=0xDFFF => self.wram[address - 0xD000 + 0x1000 * self.wram_bank],
+            0xE000..=0xEFFF => self.wram[address - 0xE000],
+            0xF000..=0xFDFF => self.wram[address - 0xF000 + 0x1000 * self.wram_bank],
+            0xFE00..=0xFE9F => todo!("Unsupported bus read: {:#04X} ({})", address, "OAM"),
+            0xFF00..=0xFF7F => todo!("Unsupported bus read: {:#04X} ({})", address, "IO Regs"),
+            0xFF80..=0xFFFE => self.hram[address - 0xFF80],
+            0xFFFF => self.int_enable,
+            _ => 0
         }
     }
 
@@ -50,19 +52,20 @@ impl MemoryBus {
 
     /// Writes a byte of `value` to the `address`.
     pub fn write_byte(&mut self, address: u16, value: u8) {
-        use MemoryRegion::*;
         let address = address as usize;
-        match MemoryRegion::from_address(address) {
-            ROM => self.memory[address] = value,
-            VRAM => self.ppu.write_vram(address, value),
-            CRAM => self.memory[address] = value,
-            WRAM => todo!("Unsupported bus write: {:#04X} ({})", address, "WRAM"),
-            ECHO => (),
-            OAM => todo!("Unsupported bus write: {:#04X} ({})", address, "OAM"),
-            RESERVED => (),
-            IO => todo!("Unsupported bus write: {:#04X} ({})", address, "IO Regs"),
-            HRAM => todo!("Unsupported bus write: {:#04X} ({})", address, "HRAM"),
-            IER => todo!("Unsupported bus write: {:#04X} ({})", address, "IE"),
+        match address {
+            0x0000..=0x7FFF => self.cart[address] = value,
+            0x8000..=0x9FFF => self.ppu.write_vram(address, value),
+            0xA000..=0xBFFF => self.cart[address] = value,
+            0xC000..=0xCFFF => self.wram[address - 0xC000] = value,
+            0xD000..=0xDFFF => self.wram[address - 0xD000 + 0x1000 * self.wram_bank] = value,
+            0xE000..=0xEFFF => self.wram[address - 0xE000] = value,
+            0xF000..=0xFDFF => self.wram[address - 0xF000 + 0x1000 * self.wram_bank] = value,
+            0xFE00..=0xFE9F => todo!("Unsupported bus read: {:#04X} ({})", address, "OAM"),
+            0xFF00..=0xFF7F => todo!("Unsupported bus read: {:#04X} ({})", address, "IO Regs"),
+            0xFF80..=0xFFFE => self.hram[address - 0xFF80] = value,
+            0xFFFF => self.int_enable = value,
+            _ => {}
         };
     }
 }
