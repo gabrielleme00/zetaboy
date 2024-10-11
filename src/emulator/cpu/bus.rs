@@ -1,15 +1,29 @@
+<<<<<<< HEAD
 mod regions;
 mod ram;
 
 use crate::emulator::ppu::*;
 use ram::*;
+=======
+use crate::emulator::ppu::*;
+
+const HRAM_SIZE: usize = 0x7F;
+const WRAM_SIZE: usize = 0x8000;
+>>>>>>> c934821f511b7999703abb6d1ff8d829f2498e1b
 
 pub struct MemoryBus {
     cart: Vec<u8>,
     ppu: PPU,
+<<<<<<< HEAD
     ram: RAM,
     int_enable: u8,
     int_flag: u8,
+=======
+    hram: [u8; HRAM_SIZE],
+    wram: [u8; WRAM_SIZE],
+    wram_bank: usize,
+    int_enable: u8,
+>>>>>>> c934821f511b7999703abb6d1ff8d829f2498e1b
 }
 
 impl MemoryBus {
@@ -20,6 +34,10 @@ impl MemoryBus {
             ram: RAM::new(),
             int_enable: 0,
             int_flag: 0,
+            hram: [0; HRAM_SIZE],
+            wram: [0; WRAM_SIZE],
+            wram_bank: 1,
+            int_enable: 0,
         }
     }
 
@@ -60,6 +78,7 @@ impl MemoryBus {
     pub fn write_byte(&mut self, address: u16, value: u8) {
         let address = address as usize;
         match address {
+<<<<<<< HEAD
             0x0000 ..= 0x7FFF => self.cart[address] = value,
             0x8000 ..= 0x9FFF => self.ppu.write_vram(address, value),
             0xA000 ..= 0xBFFF => self.cart[address] = value,
@@ -79,6 +98,20 @@ impl MemoryBus {
             0xFF80 ..= 0xFFFE => self.ram.write_hram(address, value),
             0xFFFF => self.int_enable = value,
             _ => (),
+=======
+            0x0000..=0x7FFF => self.cart[address] = value,
+            0x8000..=0x9FFF => self.ppu.write_vram(address, value),
+            0xA000..=0xBFFF => self.cart[address] = value,
+            0xC000..=0xCFFF => self.wram[address - 0xC000] = value,
+            0xD000..=0xDFFF => self.wram[address - 0xD000 + 0x1000 * self.wram_bank] = value,
+            0xE000..=0xEFFF => self.wram[address - 0xE000] = value,
+            0xF000..=0xFDFF => self.wram[address - 0xF000 + 0x1000 * self.wram_bank] = value,
+            0xFE00..=0xFE9F => todo!("Unsupported bus read: {:#04X} ({})", address, "OAM"),
+            0xFF00..=0xFF7F => todo!("Unsupported bus read: {:#04X} ({})", address, "IO Regs"),
+            0xFF80..=0xFFFE => self.hram[address - 0xFF80] = value,
+            0xFFFF => self.int_enable = value,
+            _ => {}
+>>>>>>> c934821f511b7999703abb6d1ff8d829f2498e1b
         };
     }
 }
