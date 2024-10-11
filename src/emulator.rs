@@ -54,7 +54,7 @@ impl Emulator {
             if self.paused {
                 continue;
             }
-            self.render();
+            // self.render();
             self.update()?;
         }
         Ok(())

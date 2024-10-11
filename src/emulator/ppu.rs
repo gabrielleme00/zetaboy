@@ -39,6 +39,7 @@ impl PPU {
 
     /// Writes a byte of `value` to the `index` (local address).
     pub fn write_vram(&mut self, index: usize, value: u8) {
+        let index = index - 0x8000;
         self.vram[index] = value;
 
         if index >= 0x1800 {
