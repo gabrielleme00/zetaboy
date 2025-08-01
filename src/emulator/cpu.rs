@@ -1,18 +1,20 @@
-mod bus;
 mod control_unit;
 mod instructions;
+pub mod memory_bus;
 mod registers;
 
-use bus::*;
+use core::panic;
+
 use instructions::*;
+use memory_bus::*;
 use registers::*;
 
 pub struct CPU {
     reg: Registers,
-    bus: MemoryBus,
+    pub bus: MemoryBus,
     halted: bool,
-    ei: bool,
-    _stepping: bool,
+    ime: bool, // interrupt master enable
+    steps_executed: u32,
 }
 
 impl CPU {
@@ -21,41 +23,40 @@ impl CPU {
             reg: Registers::new(),
             bus: MemoryBus::new(cart_data),
             halted: false,
-            ei: true,
-            _stepping: false,
+            ime: true,
+            steps_executed: 0,
         }
     }
 
-    /// Emulates a CPU step/cycle.
-    pub fn step(&mut self) -> Result<(), &'static str> {
+    /// Emulates a CPU step. Returns the number of cycles taken.
+    pub fn step(&mut self) -> Result<u8, &'static str> {
         if self.halted {
-            return Ok(());
+            return Ok(4);
         }
 
         let mut opcode = self.bus.read_byte(self.reg.pc);
         let prefixed = opcode == 0xCB;
+
         if prefixed {
             opcode = self.read_next_byte();
+            self.reg.pc += 1;
         }
-        let next_pc = if let Some(instruction) = Instruction::from_byte(opcode, prefixed) {
-            if self.reg.pc == 0x237 {
-                let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-                println!("Executing: [{:#04X}] -> {}", self.reg.pc, description);
-                println!("A: {}", self.reg.a);
-            }
-            control_unit::execute(self, instruction)
-        } else {
-            let description = format!("0x{}{:02X}", if prefixed { "cb" } else { "" }, opcode);
-            println!(
-                "Unknown instruction found for: [{:#04X}] -> {}",
-                self.reg.pc, description
-            );
-            return Err("Unknown instruction");
-        };
 
+        let instruction = Instruction::from_byte(opcode, prefixed).unwrap_or_else(|| {
+            panic!("Unknown instruction at ${:04X}: {:#04X}", self.reg.pc, opcode);
+        });
+
+        // println!("${:0>4X} {:02X} {:?}", self.reg.pc, opcode, instruction);
+        // if self.reg.pc == 0x002F {
+        //     println!("$CFFB: 0x{:02X}", self.bus.read_byte(0xCFFB));
+        //     panic!("{}", self.reg);
+        // }
+
+        let next_pc = control_unit::execute(self, instruction);
         self.reg.pc = next_pc;
+        self.steps_executed += 1;
 
-        Ok(())
+        Ok(instruction.cycles())
     }
 
     // Helper functions
@@ -78,10 +79,10 @@ impl CPU {
     /// Evaluates the flag condition and returns a boolean result.
     fn test_flag_condition(&self, test: FlagCondition) -> bool {
         match test {
-            FlagCondition::Zero => self.reg.f.z,
-            FlagCondition::NotZero => !self.reg.f.z,
-            FlagCondition::Carry => self.reg.f.c,
-            FlagCondition::NotCarry => !self.reg.f.c,
+            FlagCondition::Zero => self.reg.f.z == true,
+            FlagCondition::NotZero => self.reg.f.z == false,
+            FlagCondition::Carry => self.reg.f.c == true,
+            FlagCondition::NotCarry => self.reg.f.c == false,
         }
     }
 
@@ -99,7 +100,7 @@ impl CPU {
     /// Adds `value` as C flag value to the A register (accumulator).
     fn alu_adc(&mut self, value: u8) {
         let a = self.reg.a;
-        let c = self.reg.c as u8;
+        let c = self.reg.f.c as u8;
         let new_value = a.wrapping_add(value).wrapping_add(c);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
@@ -131,7 +132,7 @@ impl CPU {
     /// Compares register A and the given `value` by calculating: A - `value`.
     fn alu_cp(&mut self, value: u8) {
         let a = self.reg.a;
-        self.alu_sub(value); 
+        self.alu_sub(value);
         self.reg.a = a;
     }
 
@@ -140,7 +141,7 @@ impl CPU {
         let new_value = value.wrapping_sub(1);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = true;
-        self.reg.f.h = value.trailing_zeros() >= 4;
+        self.reg.f.h = (value & 0x0F) == 0;
         new_value
     }
 
@@ -149,16 +150,16 @@ impl CPU {
         let new_value = value.wrapping_add(1);
         self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
-        self.reg.f.h = value.trailing_zeros() >= 4;
+        self.reg.f.h = (value & 0x0F) == 0x0F; // Half-carry when lower nibble overflows
         new_value
     }
 
-    /// Adds the immediate next byte value to the current address and jumps
-    /// to it.
+    /// Performs a relative jump by adding the signed immediate value to the current PC.
+    /// The offset is a signed 8-bit value, and the PC should point to the instruction after JR.
     fn alu_jr(&mut self) -> u16 {
-        let pc = self.reg.pc as i32;
-        let value = (self.read_next_byte() as i8) as i32;
-        (pc + value + 2) as u16
+        let offset = self.read_next_byte() as i8 as i16;
+        let next_pc = self.reg.pc.wrapping_add(2); // PC after JR opcode and operand
+        next_pc.wrapping_add(offset as u16)
     }
 
     /// Rotates A to the left through Carry flag.
@@ -228,12 +229,23 @@ impl CPU {
         self.reg.a = new_a;
     }
 
+    /// Performs a bitwise OR operation with the A register (accumulator).
     fn alu_or(&mut self, value: u8) {
         let new_value = self.reg.a | value;
-        self.reg.f.z = false;
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
-        self.reg.f.c = new_value == 0;
+        self.reg.f.c = false;
+        self.reg.a = new_value;
+    }
+
+    /// Performs a bitwise AND operation with the A register (accumulator).
+    fn alu_and(&mut self, value: u8) {
+        let new_value = self.reg.a & value;
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = true;
+        self.reg.f.c = false;
         self.reg.a = new_value;
     }
 
@@ -249,14 +261,12 @@ impl CPU {
     }
 
     /// Pushes a `value` to the top of the stack.
-    fn alu_push(&mut self, value: u16) -> u16 {
+    fn alu_push(&mut self, value: u16) {
         self.reg.sp = self.reg.sp.wrapping_sub(1);
-        self.bus.write_byte(self.reg.sp, (value >> 8) as u8);
+        self.bus.write_byte(self.reg.sp, (value >> 8) as u8).unwrap();
 
         self.reg.sp = self.reg.sp.wrapping_sub(1);
-        self.bus.write_byte(self.reg.sp, (value & 0xFF) as u8);
-
-        self.reg.pc.wrapping_add(1)
+        self.bus.write_byte(self.reg.sp, (value & 0xFF) as u8).unwrap();
     }
 
     /// XORs `value` to the A register (accumulator).
@@ -267,5 +277,19 @@ impl CPU {
         self.reg.f.h = false;
         self.reg.f.c = false;
         self.reg.a = new_value;
+    }
+
+    pub fn request_interrupt(&mut self, interrupt: u8) {
+        self.bus.io.int_flag |= interrupt;
+    }
+
+    /// Swaps the nibbles of a byte.
+    pub fn alu_swap(&mut self, value: u8) -> u8 {
+        let new_value = ((value & 0xF0) >> 4) | ((value & 0x0F) << 4);
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = false;
+        new_value
     }
 }

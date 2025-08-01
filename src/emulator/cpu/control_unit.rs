@@ -1,20 +1,23 @@
 use super::instructions::*;
 use super::CPU;
 
-use ArithmeticSource8 as AS8;
 use ArithmeticSource16 as AS16;
+use ArithmeticSource8 as AS8;
 
-/// Executes a given `instruction`
+/// Executes a given `instruction`. Returns the next program counter value.
 pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
     use Instruction::*;
     match instruction {
         ADC(source) => adc(cpu, source),
         ADD(source) => add(cpu, source),
         ADDHL(value) => add_hl(cpu, value),
+        AND(source) => and(cpu, source),
         CALL(test) => call(cpu, test),
+        CP(value) => cp(cpu, value),
+        CPL => cpl(cpu),
         DEC(value) => dec(cpu, value),
-        DI => set_ei(cpu, false),
-        EI => set_ei(cpu, true),
+        DI => set_ime(cpu, false),
+        EI => set_ime(cpu, true),
         HALT => cpu.reg.pc,
         INC(value) => inc(cpu, value),
         JP(test) => jp(cpu, test),
@@ -24,17 +27,19 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         LD(load_type) => ld(cpu, load_type),
         NOP => cpu.reg.pc.wrapping_add(1),
         OR(value) => or(cpu, value),
-        POP(value) => pop(cpu, value),
+        POP(target) => pop(cpu, target),
         PUSH(value) => push(cpu, value),
+        RES(bit, target) => res(cpu, bit, target),
         RET(test) => ret(cpu, test),
         RLA => rla(cpu),
         RLCA => rlca(cpu),
         RRA => rra(cpu),
         RRCA => rrca(cpu),
+        RST(value) => rst(cpu, value),
         SBC(source) => sbc(cpu, source),
         SUB(source) => sub(cpu, source),
+        SWAP(source) => swap(cpu, source),
         XOR(value) => xor(cpu, value),
-        CP(value) => cp(cpu, value),
         // _ => cpu.reg.pc, /* TODO: support more instructions */
     }
 }
@@ -53,7 +58,7 @@ fn adc(cpu: &mut CPU, source: AS8) -> u16 {
         AS8::D8 => {
             length = 2;
             cpu.read_next_byte()
-        },
+        }
     });
     cpu.reg.pc.wrapping_add(length)
 }
@@ -72,7 +77,7 @@ fn add(cpu: &mut CPU, source: AS8) -> u16 {
         AS8::D8 => {
             length = 2;
             cpu.read_next_byte()
-        },
+        }
     });
     cpu.reg.pc.wrapping_add(length)
 }
@@ -91,7 +96,7 @@ fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
         AS8::D8 => {
             length = 2;
             cpu.read_next_byte()
-        },
+        }
     });
     cpu.reg.pc.wrapping_add(length)
 }
@@ -110,7 +115,7 @@ fn sub(cpu: &mut CPU, source: AS8) -> u16 {
         AS8::D8 => {
             length = 2;
             cpu.read_next_byte()
-        },
+        }
     });
     cpu.reg.pc.wrapping_add(length)
 }
@@ -135,6 +140,7 @@ fn call(cpu: &mut CPU, test: JumpCondition) -> u16 {
     }
 }
 
+/// Compares register A and the given `value` by calculating: A - `value`.
 fn cp(cpu: &mut CPU, source: AS8) -> u16 {
     let mut length = 1;
     cpu.alu_cp(match source {
@@ -149,9 +155,18 @@ fn cp(cpu: &mut CPU, source: AS8) -> u16 {
         AS8::D8 => {
             length = 2;
             cpu.read_next_byte()
-        },
+        }
     });
     cpu.reg.pc.wrapping_add(length)
+}
+
+/// Take the one's complement (i.e., flip all bits) of the contents of
+/// register A and sets the N and H flags.
+fn cpl(cpu: &mut CPU) -> u16 {
+    cpu.reg.a = !cpu.reg.a;
+    cpu.reg.f.n = true;
+    cpu.reg.f.h = true;
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
@@ -167,7 +182,7 @@ fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::HLI => {
             let addr = cpu.reg.get_hl();
             let new_value = cpu.alu_dec(cpu.bus.read_byte(addr));
-            cpu.bus.write_byte(addr, new_value);
+            cpu.bus.write_byte(addr, new_value).unwrap();
         }
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_sub(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_sub(1)),
@@ -190,7 +205,7 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::HLI => {
             let addr = cpu.reg.get_hl();
             let new_value = cpu.alu_inc(cpu.bus.read_byte(addr));
-            cpu.bus.write_byte(addr, new_value);
+            cpu.bus.write_byte(addr, new_value).unwrap();
         }
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_add(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_add(1)),
@@ -203,8 +218,8 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
 /// Jumps to the address given by the next 2 bytes if the condition is met.
 fn jp(cpu: &CPU, test: JumpCondition) -> u16 {
     if cpu.test_jump_condition(test) {
-        // Game Boy is little endian so read pc + 2 as most significant byte
-        // and pc + 1 as least significant byte
+        // Game Boy is little endian so read pc + 1 as least significant byte
+        // and pc + 2 as most significant byte
         let least_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 1) as u16;
         let most_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 2) as u16;
         (most_significant_byte << 8) | least_significant_byte
@@ -227,15 +242,19 @@ fn jr_if(cpu: &mut CPU, condition: FlagCondition) -> u16 {
 fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
     use LoadByteSource as LBS;
     use LoadByteTarget as LBT;
+    use LoadWordSource as LWS;
+    use LoadWordTarget as LWT;
+    use LoadIndirect as LI;
+    use LoadType as LT;
 
     match load_type {
-        LoadType::Byte(target, source) => {
+        LT::Byte(target, source) => {
             let source_value = match source {
                 LBS::A => cpu.reg.a,
-                LBS::B => cpu.reg.a,
-                LBS::C => cpu.reg.a,
-                LBS::D => cpu.reg.a,
-                LBS::E => cpu.reg.a,
+                LBS::B => cpu.reg.b,
+                LBS::C => cpu.reg.c,
+                LBS::D => cpu.reg.d,
+                LBS::E => cpu.reg.e,
                 LBS::H => cpu.reg.h,
                 LBS::L => cpu.reg.l,
                 LBS::D8 => cpu.read_next_byte(),
@@ -249,81 +268,121 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LBT::E => cpu.reg.e = source_value,
                 LBT::H => cpu.reg.h = source_value,
                 LBT::L => cpu.reg.l = source_value,
-                LBT::HLI => cpu.bus.write_byte(cpu.reg.get_hl(), source_value),
+                LBT::HLI => {
+                    let addr = cpu.reg.get_hl();
+                    cpu.bus.write_byte(addr, source_value).unwrap();
+                }
             };
             cpu.reg.pc.wrapping_add(match source {
                 LBS::D8 => 2,
                 _ => 1,
             })
         }
-        LoadType::Word(target, source) => {
+        LT::Word(target, source) => {
             let source_value = match source {
-                LoadWordSource::D16 => cpu.read_next_word(),
-                LoadWordSource::HL => cpu.reg.get_hl(),
-                LoadWordSource::SP => cpu.reg.sp,
+                LWS::D16 => cpu.read_next_word(),
+                LWS::HL => cpu.reg.get_hl(),
+                LWS::SP => cpu.reg.sp,
             };
             match target {
-                LoadWordTarget::HL => cpu.reg.set_hl(source_value),
-                LoadWordTarget::BC => cpu.reg.set_bc(source_value),
-                LoadWordTarget::DE => cpu.reg.set_de(source_value),
-                LoadWordTarget::SP => cpu.reg.sp = source_value,
-                LoadWordTarget::A16 => {
+                LWT::HL => cpu.reg.set_hl(source_value),
+                LWT::BC => cpu.reg.set_bc(source_value),
+                LWT::DE => cpu.reg.set_de(source_value),
+                LWT::SP => cpu.reg.sp = source_value,
+                LWT::A16 => {
                     let addr = cpu.read_next_word();
-                    cpu.bus.write_byte(addr, cpu.reg.sp as u8);
-                    cpu.bus.write_byte(addr + 1, (cpu.reg.sp >> 8) as u8);
-                },
+                    cpu.bus.write_word(addr, cpu.reg.sp).unwrap();
+                }
             };
-            cpu.reg.pc.wrapping_add(3)
+            cpu.reg.pc.wrapping_add(match (target, source) {
+                (LWT::A16, _) => 3, // A16 target always uses 3 bytes (opcode + 2-byte address)
+                (_, LWS::D16) => 3, // D16 source uses 3 bytes (opcode + 2-byte immediate)
+                _ => 1,                        // Register to register operations are 1 byte
+            })
         }
-        LoadType::IndirectFromA(target) => {
+        LT::IndirectFromA(target) => {
             let mut length = 1;
             match target {
-                LoadIndirect::BC => cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a),
-                LoadIndirect::DE => cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a),
-                LoadIndirect::HLinc => {
+                LI::BC => {
+                    cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a).unwrap();
+                }
+                LI::DE => {
+                    cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a).unwrap();
+                }
+                LI::HLinc => {
                     let hl = cpu.reg.get_hl();
-                    cpu.bus.write_byte(hl, cpu.reg.a);
+                    cpu.bus.write_byte(hl, cpu.reg.a).unwrap();
                     cpu.reg.set_hl(hl.wrapping_add(1));
                 }
-                LoadIndirect::HLdec => {
+                LI::HLdec => {
                     let hl = cpu.reg.get_hl();
-                    cpu.bus.write_byte(hl, cpu.reg.a);
+                    cpu.bus.write_byte(hl, cpu.reg.a).unwrap();
                     cpu.reg.set_hl(hl.wrapping_sub(1));
                 }
-                LoadIndirect::HL => cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a),
-                LoadIndirect::A8 => {
-                    let addr = 0xFF00 | (cpu.read_next_byte() as u16);
-                    cpu.bus.write_byte(addr, cpu.reg.a);
+                LI::HL => {
+                    cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a).unwrap();
+                }
+                LI::A8 => {
+                    let offset = cpu.read_next_byte() as u16;
+                    let addr = 0xFF00 | offset;
+                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
                     length = 2;
-                },
-                LoadIndirect::A16 => {
+                }
+                LI::A16 => {
                     let addr = cpu.read_next_word();
-                    cpu.bus.write_byte(addr, cpu.reg.a);
+                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
                     length = 3;
-                },
-                LoadIndirect::C => {
+                }
+                LI::C => {
                     let addr = 0xFF00 | (cpu.reg.c as u16);
-                    cpu.bus.write_byte(addr, cpu.reg.a);
-                },
+                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
+                }
             }
             cpu.reg.pc.wrapping_add(length)
         }
-        LoadType::AFromIndirect(source) => {
+        LT::AFromIndirect(source) => {
             let mut length = 1;
             match source {
-                LoadIndirect::A8 => {
-                    let addr = 0xFF00 | (cpu.read_next_byte() as u16);
+                LI::A8 => {
+                    let offset = cpu.read_next_byte() as u16;
+                    let addr = 0xFF00 | offset;
                     cpu.reg.a = cpu.bus.read_byte(addr);
                     length = 2;
-                },
-                LoadIndirect::C => {
+                }
+                LI::A16 => {
+                    let addr = cpu.read_next_word();
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                    length = 3;
+                }
+                LI::HLinc => {
+                    let hl = cpu.reg.get_hl();
+                    cpu.reg.a = cpu.bus.read_byte(hl);
+                    cpu.reg.set_hl(hl.wrapping_add(1));
+                }
+                LI::C => {
                     let addr = 0xFF00 | (cpu.reg.c as u16);
                     cpu.reg.a = cpu.bus.read_byte(addr);
-                },
-                _ => todo!("Unknown AFromIndirect source"),
+                }
+                LI::BC => {
+                    let addr = cpu.reg.get_bc();
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                }
+                LI::DE => {
+                    let addr = cpu.reg.get_de();
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                }
+                LI::HL => {
+                    let addr = cpu.reg.get_hl();
+                    cpu.reg.a = cpu.bus.read_byte(addr);
+                }
+                LI::HLdec => {
+                    let hl = cpu.reg.get_hl();
+                    cpu.reg.a = cpu.bus.read_byte(hl);
+                    cpu.reg.set_hl(hl.wrapping_sub(1));
+                }
             }
             cpu.reg.pc.wrapping_add(length)
-        },
+        }
     }
 }
 
@@ -346,10 +405,29 @@ fn or(cpu: &mut CPU, value: AS8) -> u16 {
     cpu.reg.pc.wrapping_add(length)
 }
 
-fn pop(cpu: &mut CPU, value: StackTarget) -> u16 {
-    use StackTarget as ST;
-    let result = cpu.alu_pop();
+fn and(cpu: &mut CPU, value: AS8) -> u16 {
+    let mut length = 1;
     match value {
+        AS8::A => cpu.alu_and(cpu.reg.a),
+        AS8::B => cpu.alu_and(cpu.reg.b),
+        AS8::C => cpu.alu_and(cpu.reg.c),
+        AS8::D => cpu.alu_and(cpu.reg.d),
+        AS8::E => cpu.alu_and(cpu.reg.e),
+        AS8::H => cpu.alu_and(cpu.reg.h),
+        AS8::L => cpu.alu_and(cpu.reg.l),
+        AS8::HLI => cpu.alu_and(cpu.read_byte_hl()),
+        AS8::D8 => {
+            cpu.alu_and(cpu.read_next_byte());
+            length = 2;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn pop(cpu: &mut CPU, target: StackOperand) -> u16 {
+    use StackOperand as ST;
+    let result = cpu.alu_pop();
+    match target {
         ST::AF => cpu.reg.set_af(result),
         ST::BC => cpu.reg.set_bc(result),
         ST::DE => cpu.reg.set_de(result),
@@ -358,14 +436,15 @@ fn pop(cpu: &mut CPU, value: StackTarget) -> u16 {
     cpu.reg.pc.wrapping_add(1)
 }
 
-fn push(cpu: &mut CPU, value: StackTarget) -> u16 {
-    use StackTarget as ST;
-    cpu.alu_push(match value {
+fn push(cpu: &mut CPU, source: StackOperand) -> u16 {
+    use StackOperand as ST;
+    cpu.alu_push(match source {
         ST::AF => cpu.reg.get_af(),
         ST::BC => cpu.reg.get_bc(),
         ST::DE => cpu.reg.get_de(),
         ST::HL => cpu.reg.get_hl(),
-    })
+    });
+    cpu.reg.pc.wrapping_add(1)
 }
 
 fn ret(cpu: &mut CPU, test: JumpCondition) -> u16 {
@@ -400,8 +479,8 @@ fn rrca(cpu: &mut CPU) -> u16 {
     cpu.reg.pc.wrapping_add(1)
 }
 
-fn set_ei(cpu: &mut CPU, value: bool) -> u16 {
-    cpu.ei = value;
+fn set_ime(cpu: &mut CPU, value: bool) -> u16 {
+    cpu.ime = value;
     cpu.reg.pc.wrapping_add(1)
 }
 
@@ -422,4 +501,54 @@ fn xor(cpu: &mut CPU, value: AS8) -> u16 {
         }
     };
     cpu.reg.pc.wrapping_add(length)
+}
+
+fn swap(cpu: &mut CPU, value: AS8) -> u16 {
+    let mut length = 1;
+    match value {
+        AS8::A => cpu.reg.a = cpu.alu_swap(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_swap(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_swap(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_swap(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_swap(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_swap(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_swap(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_swap(value);
+            cpu.bus.write_byte(addr, new_value).unwrap();
+        }
+        AS8::D8 => {
+            cpu.alu_swap(cpu.read_next_byte());
+            length = 2;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn rst(cpu: &mut CPU, value: u16) -> u16 {
+    cpu.alu_push(cpu.reg.pc.wrapping_add(1));
+    value
+}
+
+/// Resets a bit in the specified target register or memory location.
+fn res(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
+    let inverted_mask = !(1 << bit);
+    match target {
+        AS8::A => cpu.reg.a &= inverted_mask,
+        AS8::B => cpu.reg.b &= inverted_mask,
+        AS8::C => cpu.reg.c &= inverted_mask,
+        AS8::D => cpu.reg.d &= inverted_mask,
+        AS8::E => cpu.reg.e &= inverted_mask,
+        AS8::H => cpu.reg.h &= inverted_mask,
+        AS8::L => cpu.reg.l &= inverted_mask,
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            cpu.bus.write_byte(addr, value & inverted_mask).unwrap();
+        }
+        _ => panic!("Unsupported RES target: {:?}", target),
+    };
+    cpu.reg.pc.wrapping_add(1)
 }

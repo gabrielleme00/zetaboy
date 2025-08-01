@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Copy)]
 pub enum FlagCondition {
     Zero,
     NotZero,
@@ -5,11 +6,13 @@ pub enum FlagCondition {
     NotCarry,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum JumpCondition {
     Always,
     Flag(FlagCondition),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ArithmeticSource8 {
     A,
     B,
@@ -22,6 +25,7 @@ pub enum ArithmeticSource8 {
     D8,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ArithmeticSource16 {
     BC,
     DE,
@@ -29,6 +33,7 @@ pub enum ArithmeticSource16 {
     SP,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum IncDecSource {
     A,
     B,
@@ -44,6 +49,7 @@ pub enum IncDecSource {
     HLI,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
     Word(LoadWordTarget, LoadWordSource),
@@ -53,6 +59,7 @@ pub enum LoadType {
     // ByteAddressFromA(_),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadByteTarget {
     A,
     B,
@@ -64,6 +71,7 @@ pub enum LoadByteTarget {
     HLI,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadByteSource {
     A,
     B,
@@ -76,6 +84,7 @@ pub enum LoadByteSource {
     D8,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadWordTarget {
     BC,
     DE,
@@ -84,12 +93,14 @@ pub enum LoadWordTarget {
     A16,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadWordSource {
     HL,
     SP,
     D16,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum LoadIndirect {
     BC,
     DE,
@@ -101,7 +112,8 @@ pub enum LoadIndirect {
     C,
 }
 
-pub enum StackTarget {
+#[derive(Debug, Clone, Copy)]
+pub enum StackOperand {
     AF,
     BC,
     DE,

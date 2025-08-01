@@ -12,10 +12,10 @@ const HEIGHT: usize = 144;
 
 pub struct Emulator {
     window: Window,
-    buffer: Vec<u32>,
     paused: bool,
     running: bool,
     ticks: u64,
+    cycles: u64,
     cpu: CPU,
 }
 
@@ -38,10 +38,10 @@ impl Emulator {
 
         Ok(Emulator {
             window,
-            buffer: vec![0; WIDTH * HEIGHT],
             paused: false,
             running: true,
             ticks: 0,
+            cycles: 0,
             cpu: CPU::new(&cart.rom_data),
         })
     }
@@ -54,22 +54,25 @@ impl Emulator {
             if self.paused {
                 continue;
             }
-            // self.render();
             self.update()?;
         }
         Ok(())
     }
 
-    fn render(&mut self) {
-        for i in self.buffer.iter_mut() {
-            *i = 0;
-        }
-
-        self.window.update_with_buffer(&self.buffer, WIDTH, HEIGHT).unwrap();
-    }
-
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
-        self.cpu.step()?;
+        let cycles = self.cpu.step()?;
+        let bgp_value = self.cpu.bus.read_byte(0xFF47);
+        self.cpu.bus.ppu.step(cycles, bgp_value, &mut self.cpu.bus.io);
+        if self.cpu.bus.ppu.interrupt != 0 {
+            self.cpu.request_interrupt(self.cpu.bus.ppu.interrupt);
+            self.cpu.bus.ppu.interrupt = 0;
+        }
+        let lcd_enabled = self.cpu.bus.io.lcdc & 0x80 != 0;
+        let vblank = self.cpu.bus.ppu.mode == ppu::PPUMode::VBlank;
+        if lcd_enabled && vblank {
+            self.window.update_with_buffer(&self.cpu.bus.ppu.buffer, WIDTH, HEIGHT).unwrap();
+        }
+        self.cycles += cycles as u64;
         self.ticks += 1;
         Ok(())
     }

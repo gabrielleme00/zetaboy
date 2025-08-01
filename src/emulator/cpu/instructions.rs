@@ -2,6 +2,7 @@ mod operands;
 
 pub use operands::*;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     // Control (misc)
     NOP,
@@ -18,20 +19,20 @@ pub enum Instruction {
     CALL(JumpCondition),
     RET(JumpCondition),
     // RETI,
-    // RST,
+    RST(u16),
 
     // ALU (8-bit)
     ADD(ArithmeticSource8),
     ADC(ArithmeticSource8),
     SUB(ArithmeticSource8),
     SBC(ArithmeticSource8),
-    // AND,
+    AND(ArithmeticSource8),
     XOR(ArithmeticSource8),
     OR(ArithmeticSource8),
     CP(ArithmeticSource8),
     // DAA,
     // SCF,
-    // CPL,
+    CPL,
     // CCF,
 
     // ALU (16-bit)
@@ -41,8 +42,8 @@ pub enum Instruction {
     // LSM (8-bit)
 
     // LSM (16-bit)
-    POP(StackTarget),
-    PUSH(StackTarget),
+    POP(StackOperand),
+    PUSH(StackOperand),
 
     // RSB (8-bit)
     RLCA,
@@ -57,7 +58,8 @@ pub enum Instruction {
     // SLA,
     // SRA,
     // SRL,
-    // SWAP,
+    SWAP(ArithmeticSource8),
+    RES(u8, ArithmeticSource8),
 
     // TODO: change param types
     INC(IncDecSource),
@@ -66,6 +68,108 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    pub fn cycles(&self) -> u8 {
+        use Instruction::*;
+        match self {
+           NOP => 4,
+           LD(LoadType::Word(LoadWordTarget::BC, LoadWordSource::D16)) => 12,
+           LD(LoadType::IndirectFromA(LoadIndirect::BC)) => 8,
+           INC(IncDecSource::BC) => 8,
+           INC(IncDecSource::B) => 4,
+           DEC(IncDecSource::B) => 4,
+           LD(LoadType::Byte(LoadByteTarget::B, LoadByteSource::D8)) => 8,
+           RLCA => 4,
+           LD(LoadType::Word(LoadWordTarget::A16, LoadWordSource::SP)) => 20,
+           ADDHL(ArithmeticSource16::BC) => 8,
+           LD(LoadType::AFromIndirect(LoadIndirect::BC)) => 8,
+           DEC(IncDecSource::BC) => 8,
+           INC(IncDecSource::C) => 4,
+           DEC(IncDecSource::C) => 4,
+           LD(LoadType::Byte(LoadByteTarget::C, LoadByteSource::D8)) => 8,
+           RRCA => 4,
+
+           LD(LoadType::Word(LoadWordTarget::DE, LoadWordSource::D16)) => 12,
+           LD(LoadType::IndirectFromA(LoadIndirect::DE)) => 8,
+           INC(IncDecSource::DE) => 8,
+           INC(IncDecSource::D) => 4,
+           DEC(IncDecSource::D) => 4,
+           LD(LoadType::Byte(LoadByteTarget::D, LoadByteSource::D8)) => 8,
+           RLA => 4,
+           JR => 12,
+           ADDHL(ArithmeticSource16::DE) => 8,
+           LD(LoadType::AFromIndirect(LoadIndirect::DE)) => 8,
+           DEC(IncDecSource::DE) => 8,
+           INC(IncDecSource::E) => 4,
+           DEC(IncDecSource::E) => 4,
+           LD(LoadType::Byte(LoadByteTarget::E, LoadByteSource::D8)) => 8,
+           RRA => 4,
+
+           JRIF(_) => 3, // TODO: this can be 2
+           LD(LoadType::Word(LoadWordTarget::HL, LoadWordSource::D16)) => 12,
+           LD(LoadType::IndirectFromA(LoadIndirect::HLinc)) => 8,
+           INC(IncDecSource::HL) => 8,
+           INC(IncDecSource::H) => 4,
+           DEC(IncDecSource::H) => 4,
+           LD(LoadType::Byte(LoadByteTarget::H, LoadByteSource::D8)) => 8,
+           ADDHL(ArithmeticSource16::HL) => 8,
+           LD(LoadType::AFromIndirect(LoadIndirect::HLinc)) => 8,
+           DEC(IncDecSource::HL) => 8,
+           INC(IncDecSource::L) => 4,
+           DEC(IncDecSource::L) => 4,
+           LD(LoadType::Byte(LoadByteTarget::L, LoadByteSource::D8)) => 8,
+
+           LD(LoadType::Word(LoadWordTarget::SP, LoadWordSource::D16)) => 12,
+           LD(LoadType::IndirectFromA(LoadIndirect::HLdec)) => 8,
+           INC(IncDecSource::SP) => 8,
+           INC(IncDecSource::HLI) => 12,
+           DEC(IncDecSource::HLI) => 12,
+           LD(LoadType::Byte(LoadByteTarget::HLI, LoadByteSource::D8)) => 12,
+           ADDHL(ArithmeticSource16::SP) => 8,
+           LD(LoadType::AFromIndirect(LoadIndirect::HLdec)) => 8,
+           DEC(IncDecSource::SP) => 8,
+           INC(IncDecSource::A) => 4,
+           DEC(IncDecSource::A) => 4,
+           LD(LoadType::Byte(LoadByteTarget::A, LoadByteSource::D8)) => 8,
+
+           LD(LoadType::Byte(LoadByteTarget::B, _)) => 4,
+           LD(LoadType::Byte(LoadByteTarget::C, _)) => 4,
+           LD(LoadType::Byte(LoadByteTarget::D, _)) => 4,
+           LD(LoadType::Byte(LoadByteTarget::E, _)) => 4,
+           LD(LoadType::Byte(LoadByteTarget::H, _)) => 4,
+           LD(LoadType::Byte(LoadByteTarget::L, _)) => 4,
+           LD(LoadType::Byte(_, LoadByteSource::HLI)) => 8,
+           LD(LoadType::Byte(LoadByteTarget::HLI, _)) => 8,
+           HALT => 4,
+
+           ADD(_) => 4,
+           ADC(_) => 4,
+           SUB(_) => 4,
+           SBC(_) => 4,
+           XOR(_) => 4,
+           OR(_) => 4,
+           CP(_) => 4,
+
+           RET(JumpCondition::Flag(_)) => 8, // TODO: this can be 20
+           POP(_) => 12,
+           JP(JumpCondition::Flag(_)) => 12, // TODO: this can be 16
+           JP(JumpCondition::Always) => 16,
+           CALL(JumpCondition::Flag(_)) => 12, // TODO: this can be 24
+           PUSH(_) => 16,
+           RET(JumpCondition::Always) => 16,
+           CALL(JumpCondition::Always) => 24,
+
+           LD(LoadType::IndirectFromA(LoadIndirect::A8)) => 12,
+           JPHL => 4,
+           LD(LoadType::IndirectFromA(LoadIndirect::A16)) => 16,
+
+           LD(LoadType::AFromIndirect(LoadIndirect::A8)) => 12,
+           DI => 4,
+           EI => 4,
+
+            _ => 0,
+        }
+    }
+
     pub fn from_byte(byte: u8, prefixed: bool) -> Option<Self> {
         match prefixed {
             false => Instruction::from_byte_not_prefixed(byte),
@@ -88,7 +192,7 @@ impl Instruction {
         use IncDecSource as IDS;
         use JumpCondition as JC;
         use FlagCondition as FC;
-        use StackTarget as ST;
+        use StackOperand as ST;
 
         match byte {
             0x00 => S(NOP),
@@ -138,6 +242,7 @@ impl Instruction {
             0x2C => S(INC(IDS::L)),
             0x2D => S(DEC(IDS::L)),
             0x2E => S(LD(LT::Byte(LBT::L, LBS::D8))),
+            0x2F => S(CPL),
 
             0x30 => S(JRIF(FC::NotCarry)),
             0x31 => S(LD(LT::Word(LWT::SP, LWS::D16))),
@@ -256,6 +361,14 @@ impl Instruction {
             0x9E => S(SBC(AS8::HLI)),
             0x9F => S(SBC(AS8::A)),
 
+            0xA0 => S(AND(AS8::B)),
+            0xA1 => S(AND(AS8::C)),
+            0xA2 => S(AND(AS8::D)),
+            0xA3 => S(AND(AS8::E)),
+            0xA4 => S(AND(AS8::H)),
+            0xA5 => S(AND(AS8::L)),
+            0xA6 => S(AND(AS8::HLI)),
+            0xA7 => S(AND(AS8::A)),
             0xA8 => S(XOR(AS8::B)),
             0xA9 => S(XOR(AS8::C)),
             0xAA => S(XOR(AS8::D)),
@@ -314,10 +427,12 @@ impl Instruction {
             0xE3 => None,
             0xE4 => None,
             0xE5 => S(PUSH(ST::HL)),
+            0xE6 => S(AND(AS8::D8)),
             0xEB => None,
             0xEC => None,
             0xED => None,
             0xEE => S(XOR(AS8::D8)),
+            0xEF => S(RST(0x28)),
             // 0xE8 => S(ADDSP(ArithmeticTarget::D8)),
             0xE9 => S(JPHL),
             0xEA => S(LD(LT::IndirectFromA(LI::A16))),
@@ -330,6 +445,7 @@ impl Instruction {
             0xF5 => S(PUSH(ST::AF)),
             0xF6 => S(OR(AS8::D8)),
             0xF9 => S(LD(LT::Word(LWT::SP, LWS::HL))),
+            0xFA => S(LD(LT::AFromIndirect(LI::A16))),
             0xFB => S(EI),
             0xFC => None,
             0xFD => None,
@@ -339,7 +455,16 @@ impl Instruction {
         }
     }
 
-    pub fn from_byte_prefixed(_byte: u8) -> Option<Self> {
-        None
+    pub fn from_byte_prefixed(byte: u8) -> Option<Self> {
+        use Instruction::*;
+        use Some as S;
+
+        use ArithmeticSource8 as AS8;
+
+        match byte {
+            0x37 => S(SWAP(AS8::A)),
+            0x87 => S(RES(0, AS8::A)),
+            _ => None,
+        }
     }
 }

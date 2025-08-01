@@ -27,18 +27,38 @@ pub struct FlagsRegister {
     pub c: bool, // Carry
 }
 
+impl std::fmt::Display for Registers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A: ${:02X} B: ${:02X} C: ${:02X} D: ${:02X} E: ${:02X} F: [{}] H: ${:02X} L: ${:02X} PC: ${:04X} SP: ${:04X}",
+            self.a, self.b, self.c, self.d, self.e, self.f, self.h, self.l, self.pc, self.sp
+        )
+    }
+}
+
+impl std::fmt::Display for FlagsRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Z: {} N: {} H: {} C: {}",
+            self.z as u8, self.n as u8, self.h as u8, self.c as u8
+        )
+    }
+}
+
 impl Registers {
     pub fn new() -> Self {
         Self {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            f: Default::default(),
-            h: 0,
-            l: 0,
-            pc: 0x100,
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            f: FlagsRegister::from(0xB0),
+            h: 0x01,
+            l: 0x4D,
+            pc: 0x0100,
             sp: 0xFFFE,
         }
     }
