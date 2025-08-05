@@ -147,10 +147,10 @@ impl CPU {
     }
 
     /// Evaluates the jump condition and returns a boolean result.
-    fn test_jump_condition(&self, test: JumpCondition) -> bool {
+    fn test_jump_condition(&self, test: Option<FlagCondition>) -> bool {
         match test {
-            JumpCondition::Always => true,
-            JumpCondition::Flag(fc) => self.test_flag_condition(fc),
+            None => true,
+            Some(fc) => self.test_flag_condition(fc),
         }
     }
 

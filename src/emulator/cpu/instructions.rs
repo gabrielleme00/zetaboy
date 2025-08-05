@@ -12,12 +12,12 @@ pub enum Instruction {
     EI,
 
     // Control (branch)
-    JP(JumpCondition),
+    JP(Option<FlagCondition>),
     JPHL,
     JR,
     JRIF(FlagCondition),
-    CALL(JumpCondition),
-    RET(JumpCondition),
+    CALL(Option<FlagCondition>),
+    RET(Option<FlagCondition>),
     RETI,
     RST(u16),
 
@@ -149,14 +149,14 @@ impl Instruction {
            OR(_) => 4,
            CP(_) => 4,
 
-           RET(JumpCondition::Flag(_)) => 8, // TODO: this can be 20
+           RET(Some(_)) => 8, // TODO: this can be 20
            POP(_) => 12,
-           JP(JumpCondition::Flag(_)) => 12, // TODO: this can be 16
-           JP(JumpCondition::Always) => 16,
-           CALL(JumpCondition::Flag(_)) => 12, // TODO: this can be 24
+           JP(Some(_)) => 12, // TODO: this can be 16
+           JP(None) => 16,
+           CALL(Some(_)) => 12, // TODO: this can be 24
            PUSH(_) => 16,
-           RET(JumpCondition::Always) => 16,
-           CALL(JumpCondition::Always) => 24,
+           RET(None) => 16,
+           CALL(None) => 24,
 
            LD(LoadType::IndirectFromA(LoadIndirect::A8)) => 12,
            JPHL => 4,
@@ -190,7 +190,6 @@ impl Instruction {
         use LoadWordSource as LWS;
         use LoadWordTarget as LWT;
         use IncDecSource as IDS;
-        use JumpCondition as JC;
         use FlagCondition as FC;
         use StackOperand as ST;
 
@@ -395,31 +394,31 @@ impl Instruction {
             0xBE => S(CP(AS8::HLI)),
             0xBF => S(CP(AS8::A)),
 
-            0xC0 => S(RET(JC::Flag(FC::NotZero))),
+            0xC0 => S(RET(S(FC::NotZero))),
             0xC1 => S(POP(ST::BC)),
-            0xC2 => S(JP(JC::Flag(FC::NotZero))),
-            0xC3 => S(JP(JC::Always)),
-            0xC4 => S(CALL(JC::Flag(FC::NotZero))),
+            0xC2 => S(JP(S(FC::NotZero))),
+            0xC3 => S(JP(None)),
+            0xC4 => S(CALL(S(FC::NotZero))),
             0xC5 => S(PUSH(ST::BC)),
             // 0xC6 => S(ADD(ArithmeticTarget::D8)),
-            0xC8 => S(RET(JC::Flag(FC::Zero))),
-            0xC9 => S(RET(JC::Always)),
-            0xCA => S(JP(JC::Flag(FC::Zero))),
-            0xCC => S(CALL(JC::Flag(FC::Zero))),
-            0xCD => S(CALL(JC::Always)),
+            0xC8 => S(RET(S(FC::Zero))),
+            0xC9 => S(RET(None)),
+            0xCA => S(JP(S(FC::Zero))),
+            0xCC => S(CALL(S(FC::Zero))),
+            0xCD => S(CALL(None)),
             0xCE => S(ADC(AS8::D8)),
 
-            0xD0 => S(RET(JC::Flag(FC::NotCarry))),
+            0xD0 => S(RET(S(FC::NotCarry))),
             0xD1 => S(POP(ST::DE)),
-            0xD2 => S(JP(JC::Flag(FC::NotCarry))),
+            0xD2 => S(JP(S(FC::NotCarry))),
             0xD3 => None,
-            0xD4 => S(CALL(JC::Flag(FC::NotCarry))),
+            0xD4 => S(CALL(S(FC::NotCarry))),
             0xD5 => S(PUSH(ST::DE)),
-            0xD8 => S(RET(JC::Flag(FC::Carry))),
+            0xD8 => S(RET(S(FC::Carry))),
             0xD9 => S(RETI),
-            0xDA => S(JP(JC::Flag(FC::Carry))),
+            0xDA => S(JP(S(FC::Carry))),
             0xDB => None,
-            0xDC => S(CALL(JC::Flag(FC::Carry))),
+            0xDC => S(CALL(S(FC::Carry))),
             0xDD => None,
 
             0xE0 => S(LD(LT::IndirectFromA(LI::A8))),

@@ -134,7 +134,7 @@ fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
     cpu.reg.pc.wrapping_add(1)
 }
 
-fn call(cpu: &mut CPU, test: JumpCondition) -> u16 {
+fn call(cpu: &mut CPU, test: Option<FlagCondition>) -> u16 {
     let next_pc = cpu.reg.pc.wrapping_add(3);
     if cpu.test_jump_condition(test) {
         cpu.alu_push(next_pc);
@@ -220,7 +220,7 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
 }
 
 /// Jumps to the address given by the next 2 bytes if the condition is met.
-fn jp(cpu: &CPU, test: JumpCondition) -> u16 {
+fn jp(cpu: &CPU, test: Option<FlagCondition>) -> u16 {
     if cpu.test_jump_condition(test) {
         // Game Boy is little endian so read pc + 1 as least significant byte
         // and pc + 2 as most significant byte
@@ -451,7 +451,7 @@ fn push(cpu: &mut CPU, source: StackOperand) -> u16 {
     cpu.reg.pc.wrapping_add(1)
 }
 
-fn ret(cpu: &mut CPU, test: JumpCondition) -> u16 {
+fn ret(cpu: &mut CPU, test: Option<FlagCondition>) -> u16 {
     if cpu.test_jump_condition(test) {
         cpu.alu_pop()
     } else {
