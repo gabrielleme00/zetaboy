@@ -186,13 +186,13 @@ fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::HLI => {
             let addr = cpu.reg.get_hl();
             let new_value = cpu.alu_dec(cpu.bus.read_byte(addr));
-            cpu.bus.write_byte(addr, new_value).unwrap();
+            cpu.bus.write_byte(addr, new_value);
         }
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_sub(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_sub(1)),
         IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_sub(1)),
         IDS::SP => cpu.reg.sp = cpu.reg.sp.wrapping_sub(1),
-    }
+    };
     cpu.reg.pc.wrapping_add(1)
 }
 
@@ -209,7 +209,7 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::HLI => {
             let addr = cpu.reg.get_hl();
             let new_value = cpu.alu_inc(cpu.bus.read_byte(addr));
-            cpu.bus.write_byte(addr, new_value).unwrap();
+            cpu.bus.write_byte(addr, new_value);
         }
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_add(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_add(1)),
@@ -274,7 +274,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LBT::L => cpu.reg.l = source_value,
                 LBT::HLI => {
                     let addr = cpu.reg.get_hl();
-                    cpu.bus.write_byte(addr, source_value).unwrap();
+                    cpu.bus.write_byte(addr, source_value);
                 }
             };
             cpu.reg.pc.wrapping_add(match source {
@@ -295,7 +295,7 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LWT::SP => cpu.reg.sp = source_value,
                 LWT::A16 => {
                     let addr = cpu.read_next_word();
-                    cpu.bus.write_word(addr, cpu.reg.sp).unwrap();
+                    cpu.bus.write_word(addr, cpu.reg.sp);
                 }
             };
             cpu.reg.pc.wrapping_add(match (target, source) {
@@ -308,38 +308,38 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             let mut length = 1;
             match target {
                 LI::BC => {
-                    cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(cpu.reg.get_bc(), cpu.reg.a);
                 }
                 LI::DE => {
-                    cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(cpu.reg.get_de(), cpu.reg.a);
                 }
                 LI::HLinc => {
                     let hl = cpu.reg.get_hl();
-                    cpu.bus.write_byte(hl, cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(hl, cpu.reg.a);
                     cpu.reg.set_hl(hl.wrapping_add(1));
                 }
                 LI::HLdec => {
                     let hl = cpu.reg.get_hl();
-                    cpu.bus.write_byte(hl, cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(hl, cpu.reg.a);
                     cpu.reg.set_hl(hl.wrapping_sub(1));
                 }
                 LI::HL => {
-                    cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a);
                 }
                 LI::A8 => {
                     let offset = cpu.read_next_byte() as u16;
                     let addr = 0xFF00 | offset;
-                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(addr, cpu.reg.a);
                     length = 2;
                 }
                 LI::A16 => {
                     let addr = cpu.read_next_word();
-                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(addr, cpu.reg.a);
                     length = 3;
                 }
                 LI::C => {
                     let addr = 0xFF00 | (cpu.reg.c as u16);
-                    cpu.bus.write_byte(addr, cpu.reg.a).unwrap();
+                    cpu.bus.write_byte(addr, cpu.reg.a);
                 }
             }
             cpu.reg.pc.wrapping_add(length)
@@ -540,7 +540,7 @@ fn sla(cpu: &mut CPU, target: AS8) -> u16 {
             let addr = cpu.reg.get_hl();
             let value = cpu.bus.read_byte(addr);
             let new_value = cpu.alu_sla(value);
-            cpu.bus.write_byte(addr, new_value).unwrap();
+            cpu.bus.write_byte(addr, new_value)
         }
         AS8::D8 => {
             cpu.alu_sla(cpu.bus.read_byte(cpu.reg.pc + 2));
@@ -564,7 +564,7 @@ fn sra(cpu: &mut CPU, target: AS8) -> u16 {
             let addr = cpu.reg.get_hl();
             let value = cpu.bus.read_byte(addr);
             let new_value = cpu.alu_sra(value);
-            cpu.bus.write_byte(addr, new_value).unwrap();
+            cpu.bus.write_byte(addr, new_value);
         }
         AS8::D8 => {
             cpu.alu_sra(cpu.bus.read_byte(cpu.reg.pc + 2));
@@ -588,7 +588,7 @@ fn swap(cpu: &mut CPU, value: AS8) -> u16 {
             let addr = cpu.reg.get_hl();
             let value = cpu.bus.read_byte(addr);
             let new_value = cpu.alu_swap(value);
-            cpu.bus.write_byte(addr, new_value).unwrap();
+            cpu.bus.write_byte(addr, new_value);
         }
         AS8::D8 => {
             cpu.alu_swap(cpu.bus.read_byte(cpu.reg.pc + 2));
@@ -617,7 +617,7 @@ fn res(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
         AS8::HLI => {
             let addr = cpu.reg.get_hl();
             let value = cpu.bus.read_byte(addr);
-            cpu.bus.write_byte(addr, value & inverted_mask).unwrap();
+            cpu.bus.write_byte(addr, value & inverted_mask);
         }
         _ => panic!("Unsupported RES target: {:?}", target),
     };

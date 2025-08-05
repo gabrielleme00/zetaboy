@@ -327,10 +327,10 @@ impl CPU {
     /// Pushes a `value` to the top of the stack.
     fn alu_push(&mut self, value: u16) {
         self.reg.sp = self.reg.sp.wrapping_sub(1);
-        self.bus.write_byte(self.reg.sp, (value >> 8) as u8).unwrap();
+        self.bus.write_byte(self.reg.sp, (value >> 8) as u8);
 
         self.reg.sp = self.reg.sp.wrapping_sub(1);
-        self.bus.write_byte(self.reg.sp, (value & 0xFF) as u8).unwrap();
+        self.bus.write_byte(self.reg.sp, (value & 0xFF) as u8);
     }
 
     /// XORs `value` to the A register (accumulator).

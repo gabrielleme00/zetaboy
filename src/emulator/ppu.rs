@@ -55,15 +55,14 @@ impl PPU {
         self.vram[(address - 0x8000) as usize]
     }
 
-    pub fn write_vram(&mut self, address: u16, value: u8) -> Result<(), String> {
+    pub fn write_vram(&mut self, address: u16, value: u8) {
         if address >= 0x8000 && address < 0xA000 {
             self.vram[(address - 0x8000) as usize] = value;
-            Ok(())
         } else {
-            Err(format!(
+            panic!(
                 "Warning: VRAM write out of bounds: {:#04X} = {:#02X}",
                 address, value
-            ))
+            );
         }
     }
 
@@ -71,15 +70,14 @@ impl PPU {
         self.oam[address as usize]
     }
 
-    pub fn write_oam(&mut self, address: u16, value: u8) -> Result<(), String> {
+    pub fn write_oam(&mut self, address: u16, value: u8) {
         if address < self.oam.len() as u16 {
             self.oam[address as usize] = value;
-            Ok(())
         } else {
-            Err(format!(
+            panic!(
                 "Warning: OAM write out of bounds: {:#04X} = {:#02X}",
                 address, value
-            ))
+            );
         }
     }
 
@@ -87,15 +85,14 @@ impl PPU {
         self.bg_palette[address as usize]
     }
 
-    pub fn write_bg_palette_ram(&mut self, address: u16, value: u8) -> Result<(), String> {
+    pub fn write_bg_palette_ram(&mut self, address: u16, value: u8) {
         if address < self.bg_palette.len() as u16 {
             self.bg_palette[address as usize] = value;
-            Ok(())
         } else {
-            Err(format!(
+            panic!(
                 "Warning: BG Palette RAM write out of bounds: {:#04X} = {:#02X}",
                 address, value
-            ))
+            )
         }
     }
 
@@ -103,15 +100,14 @@ impl PPU {
         self.obj_palette[address as usize]
     }
 
-    pub fn write_obj_palette_ram(&mut self, address: u16, value: u8) -> Result<(), String> {
+    pub fn write_obj_palette_ram(&mut self, address: u16, value: u8) {
         if address < self.obj_palette.len() as u16 {
             self.obj_palette[address as usize] = value;
-            Ok(())
         } else {
-            Err(format!(
+            panic!(
                 "Warning: OBJ Palette RAM write out of bounds: {:#04X} = {:#02X}",
                 address, value
-            ))
+            );
         }
     }
 

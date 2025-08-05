@@ -16,6 +16,7 @@ pub struct Emulator {
     ticks: u64,
     cycles: u64,
     cpu: CPU,
+    prev_vblank: bool,
 }
 
 impl Emulator {
@@ -34,6 +35,7 @@ impl Emulator {
         let window: Window = Window::new(&name, width, height, options).unwrap_or_else(|e| {
             panic!("Error building window: {}", e);
         });
+        // window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
         Ok(Emulator {
             window,
@@ -42,6 +44,7 @@ impl Emulator {
             ticks: 0,
             cycles: 0,
             cpu: CPU::new(&cart.rom_data),
+            prev_vblank: false,
         })
     }
 
@@ -79,11 +82,13 @@ impl Emulator {
         let lcd_enabled = self.cpu.bus.io.lcdc & 0x80 != 0;
         let vblank = self.cpu.bus.ppu.is_vblank();
 
-        if lcd_enabled && vblank {
+        // Only update buffer on the rising edge of VBlank
+        if lcd_enabled && vblank && !self.prev_vblank {
             self.window
                 .update_with_buffer(&self.cpu.bus.ppu.buffer, WIDTH, HEIGHT)
                 .unwrap();
         }
+        self.prev_vblank = vblank;
 
         self.cycles += cycles as u64;
         self.ticks += 1;

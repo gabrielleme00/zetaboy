@@ -400,7 +400,7 @@ impl Instruction {
             0xC3 => S(JP(None)),
             0xC4 => S(CALL(S(FC::NotZero))),
             0xC5 => S(PUSH(ST::BC)),
-            // 0xC6 => S(ADD(ArithmeticTarget::D8)),
+            0xC6 => S(ADD(AS8::D8)),
             0xC8 => S(RET(S(FC::Zero))),
             0xC9 => S(RET(None)),
             0xCA => S(JP(S(FC::Zero))),

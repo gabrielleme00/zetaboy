@@ -63,67 +63,59 @@ impl MemoryBus {
     }
 
     /// Writes a byte of `value` to the `address`.
-    pub fn write_byte(&mut self, address: u16, value: u8) -> Result<(), String> {
+    pub fn write_byte(&mut self, address: u16, value: u8) {
         let address = address as usize;
         match address {
-            0x0000..=0x7FFF => Ok(self.cart[address] = value),
+            0x0000..=0x7FFF => self.cart[address] = value,
             0x8000..=0x9FFF => self.ppu.write_vram(address as u16, value),
-            0xA000..=0xBFFF => Ok(self.cart[address] = value),
-            0xC000..=0xCFFF => Ok(self.wram[address - 0xC000] = value),
-            0xD000..=0xDFFF => Ok(self.wram[address - 0xD000 + 0x1000 * self.wram_bank] = value),
-            0xE000..=0xEFFF => Ok(self.wram[address - 0xE000] = value), // WRAM mirror
-            0xF000..=0xFDFF => Ok(self.wram[address - 0xF000 + 0x1000 * self.wram_bank] = value),
+            0xA000..=0xBFFF => self.cart[address] = value,
+            0xC000..=0xCFFF => self.wram[address - 0xC000] = value,
+            0xD000..=0xDFFF => self.wram[address - 0xD000 + 0x1000 * self.wram_bank] = value,
+            0xE000..=0xEFFF => self.wram[address - 0xE000] = value, // WRAM mirror
+            0xF000..=0xFDFF => self.wram[address - 0xF000 + 0x1000 * self.wram_bank] = value,
             0xFE00..=0xFE9F => self.ppu.write_oam((address - 0xFE00) as u16, value),
-            0xFEA0..=0xFEFF => Ok(()), // Unused OAM area
-            0xFF00..=0xFF7F => {
-                match address {
-                    0xFF04 => { // DIV register - special handling
-                        self.timer.reset_div(&mut self.io.div);
-                        Ok(())
-                    },
-                    0xFF46 => { // DMA register - perform OAM DMA transfer
-                        self.io.write(address as u16, value);
-                        self.perform_dma_transfer(value);
-                        Ok(())
-                    },
-                    0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address as u16, value),
-                    0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address as u16, value),
-                    _ => Ok(self.io.write(address as u16, value)),
+            0xFEA0..=0xFEFF => {} // Unused OAM area
+            0xFF00..=0xFF7F => match address {
+                0xFF04 => self.timer.reset_div(&mut self.io.div),
+                0xFF46 => {
+                    // DMA register - perform OAM DMA transfer
+                    self.io.write(address as u16, value);
+                    self.perform_dma_transfer(value);
                 }
+                0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address as u16, value),
+                0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address as u16, value),
+                _ => self.io.write(address as u16, value),
             },
             0xFF80..=0xFFFE => {
                 if address == 0xFF80 && value == 0xFF {
                     panic!();
                 }
-                Ok(self.hram[address - 0xFF80] = value)
-            },
-            0xFFFF => Ok(self.io.int_enable = value & 0x1F),
-            _ => Err(format!("Invalid write address: {:#04X}", address)),
-        }
+                self.hram[address - 0xFF80] = value
+            }
+            0xFFFF => self.io.int_enable = value & 0x1F,
+            _ => println!("Invalid write address: {:#04X}", address),
+        };
     }
 
-    pub fn write_word(&mut self, address: u16, value: u16) -> Result<(), String> {
-        self.write_byte(address, (value & 0xFF) as u8)?;
-        self.write_byte(address + 1, (value >> 8) as u8)
+    pub fn write_word(&mut self, address: u16, value: u16) {
+        self.write_byte(address, (value & 0xFF) as u8);
+        self.write_byte(address + 1, (value >> 8) as u8);
     }
 
     /// Performs DMA transfer to OAM
     /// Copies 160 bytes from source address (value * 0x100) to OAM (0xFE00-0xFE9F)
     fn perform_dma_transfer(&mut self, source_page: u8) {
         let source_address = (source_page as u16) << 8; // source_page * 0x100
-        
+
         // Copy 160 bytes (OAM size) from source to OAM area
         for i in 0..160 {
             let source_addr = source_address + i;
-            
+
             // Read from source address
             let byte = self.read_byte(source_addr);
-            
+
             // Write to OAM through PPU
-            if let Err(_) = self.ppu.write_oam(i, byte) {
-                // Handle error if needed
-                break;
-            }
+            self.ppu.write_oam(i, byte);
         }
     }
 }
