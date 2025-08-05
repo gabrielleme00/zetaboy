@@ -47,15 +47,16 @@ const REG_HDMA3: u16 = 0xFF53;
 const REG_HDMA4: u16 = 0xFF54;
 const REG_HDMA5: u16 = 0xFF55;
 const REG_SVBK: u16 = 0xFF70;
+const REG_IE: u16 = 0xFFFF;
 
 pub struct IORegisters {
     p1: u8,
     sb: u8,
     sc: u8,
-    div: u16, // Timer registers are 16-bit internally
-    tima: u8,
-    tma: u8,
-    tac: u8,
+    pub div: u8,      // Make timer registers public
+    pub tima: u8,
+    pub tma: u8,
+    pub tac: u8,
     pub int_flag: u8,
     nr10: u8,
     nr11: u8,
@@ -83,7 +84,7 @@ pub struct IORegisters {
     pub scy: u8,
     pub scx: u8,
     pub ly: u8,
-    lyc: u8,
+    pub lyc: u8,
     dma: u8,
     bgp: u8,
     obp0: u8,
@@ -98,12 +99,13 @@ pub struct IORegisters {
     hdma4: u8,
     hdma5: u8,
     svbk: u8,
+    pub int_enable: u8,
 }
 
 impl IORegisters {
     pub fn new() -> Self {
         Self {
-            p1: 0xFF,
+            p1: 0xCF,
             sb: 0x00,
             sc: 0x00,
             div: 0x0000,
@@ -152,12 +154,13 @@ impl IORegisters {
             hdma4: 0x00,
             hdma5: 0xFF,
             svbk: 0x00,
+            int_enable: 0x00,
         }
     }
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            REG_P1 => self.p1,
+            REG_P1 => (self.p1 & 0x30) | 0x0F,
             REG_SB => self.sb,
             REG_SC => self.sc,
             REG_DIV => self.div as u8, // Return lower byte
@@ -206,13 +209,14 @@ impl IORegisters {
             REG_HDMA4 => self.hdma4,
             REG_HDMA5 => self.hdma5,
             REG_SVBK => self.svbk,
+            REG_IE => self.int_enable,
             _ => 0xFF, // For unused registers
         }
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
         match address {
-            REG_P1 => self.p1 = value,
+            REG_P1 => self.p1 = 0xC0 | (self.p1 & 0x0F) | (value & 0x30),
             REG_SB => self.sb = value,
             REG_SC => self.sc = value,
             REG_DIV => self.div = 0, // Writing to DIV resets it
@@ -265,6 +269,7 @@ impl IORegisters {
             REG_HDMA4 => self.hdma4 = value,
             REG_HDMA5 => self.hdma5 = value,
             REG_SVBK => self.svbk = value,
+            REG_IE => self.int_enable = value & 0x1F, // Only lower 5 bits are writable
             _ => (), // Ignore writes to unused registers
         };
     }

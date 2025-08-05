@@ -1,6 +1,7 @@
 pub mod io_registers;
 
 use crate::emulator::ppu::*;
+use crate::emulator::timer::Timer;
 use io_registers::*;
 
 const HRAM_SIZE: usize = 0x7F;
@@ -9,6 +10,7 @@ const WRAM_SIZE: usize = 0x8000;
 pub struct MemoryBus {
     cart: Vec<u8>,
     pub ppu: PPU,
+    pub timer: Timer,
     hram: [u8; HRAM_SIZE],
     wram: [u8; WRAM_SIZE],
     wram_bank: usize,
@@ -20,6 +22,7 @@ impl MemoryBus {
         Self {
             cart: cart_data.to_vec(),
             ppu: PPU::new(),
+            timer: Timer::new(),
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
             wram_bank: 1,
@@ -47,7 +50,7 @@ impl MemoryBus {
                 _ => self.io.read(address as u16),
             },
             0xFF80..=0xFFFE => self.hram[address - 0xFF80],
-            0xFFFF => self.io.int_flag,
+            0xFFFF => self.io.int_enable,
             _ => 0,
         }
     }
@@ -74,12 +77,21 @@ impl MemoryBus {
             0xFEA0..=0xFEFF => Ok(()), // Unused OAM area
             0xFF00..=0xFF7F => {
                 match address {
+                    0xFF04 => { // DIV register - special handling
+                        self.timer.reset_div(&mut self.io.div);
+                        Ok(())
+                    },
                     0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address as u16, value),
                     0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address as u16, value),
                     _ => Ok(self.io.write(address as u16, value)),
                 }
             },
-            0xFF80..=0xFFFE => Ok(self.hram[address - 0xFF80] = value),
+            0xFF80..=0xFFFE => {
+                if address == 0xFF80 && value == 0xFF {
+                    panic!();
+                }
+                Ok(self.hram[address - 0xFF80] = value)
+            },
             0xFFFF => Ok(self.io.int_flag = value & 0x1F),
             _ => Err(format!("Invalid write address: {:#04X}", address)),
         }

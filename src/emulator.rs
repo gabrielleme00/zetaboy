@@ -1,14 +1,13 @@
-pub mod ppu;
 mod cart;
 mod cpu;
+pub mod ppu;
+mod timer;
 
 use cart::Cart;
 use cpu::CPU;
 use minifb::{Key, Window, WindowOptions};
+use ppu::{HEIGHT, WIDTH};
 use std::error::Error;
-
-const WIDTH: usize = 160;
-const HEIGHT: usize = 144;
 
 pub struct Emulator {
     window: Window,
@@ -27,14 +26,14 @@ impl Emulator {
         let name = format!("ZetaBoy - {}", cart.get_title());
         let (width, height) = (WIDTH, HEIGHT);
         let options = WindowOptions {
-            scale: minifb::Scale::X2,
+            resize: true,
+            scale: minifb::Scale::X4,
+            scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
         };
-        let mut window: Window = Window::new(&name, width, height, options)
-            .unwrap_or_else(|e| {
-                panic!("Error building window: {}", e);
-            });
-        limit_to_60fps(&mut window);
+        let window: Window = Window::new(&name, width, height, options).unwrap_or_else(|e| {
+            panic!("Error building window: {}", e);
+        });
 
         Ok(Emulator {
             window,
@@ -61,24 +60,26 @@ impl Emulator {
 
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
         let cycles = self.cpu.step()?;
-        let bgp_value = self.cpu.bus.read_byte(0xFF47);
-        self.cpu.bus.ppu.step(cycles, bgp_value, &mut self.cpu.bus.io);
-        if self.cpu.bus.ppu.interrupt != 0 {
-            self.cpu.request_interrupt(self.cpu.bus.ppu.interrupt);
-            self.cpu.bus.ppu.interrupt = 0;
+
+        let bgp = self.cpu.bus.read_byte(0xFF47);
+        self.cpu.bus.ppu.step(cycles, bgp, &mut self.cpu.bus.io);
+
+        if self.cpu.bus.ppu.vblank_int != 0 {
+            self.cpu.request_interrupt(self.cpu.bus.ppu.vblank_int);
+            self.cpu.bus.ppu.vblank_int = 0;
         }
         let lcd_enabled = self.cpu.bus.io.lcdc & 0x80 != 0;
-        let vblank = self.cpu.bus.ppu.mode == ppu::PPUMode::VBlank;
+        let vblank = self.cpu.bus.ppu.is_vblank();
+
         if lcd_enabled && vblank {
-            self.window.update_with_buffer(&self.cpu.bus.ppu.buffer, WIDTH, HEIGHT).unwrap();
+            self.window
+                .update_with_buffer(&self.cpu.bus.ppu.buffer, WIDTH, HEIGHT)
+                .unwrap();
         }
+
         self.cycles += cycles as u64;
         self.ticks += 1;
+
         Ok(())
     }
-}
-
-fn limit_to_60fps(window: &mut Window) {
-    let fps60 = std::time::Duration::from_micros(16600);
-    window.limit_update_rate(Some(fps60));
 }

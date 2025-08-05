@@ -29,7 +29,6 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         OR(value) => or(cpu, value),
         POP(target) => pop(cpu, target),
         PUSH(value) => push(cpu, value),
-        RES(bit, target) => res(cpu, bit, target),
         RET(test) => ret(cpu, test),
         RLA => rla(cpu),
         RLCA => rlca(cpu),
@@ -38,8 +37,10 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         RST(value) => rst(cpu, value),
         SBC(source) => sbc(cpu, source),
         SUB(source) => sub(cpu, source),
-        SWAP(source) => swap(cpu, source),
         XOR(value) => xor(cpu, value),
+        // Prefixed
+        RES(bit, target) => res(cpu, bit, target),
+        SWAP(source) => swap(cpu, source),
         // _ => cpu.reg.pc, /* TODO: support more instructions */
     }
 }
@@ -504,7 +505,7 @@ fn xor(cpu: &mut CPU, value: AS8) -> u16 {
 }
 
 fn swap(cpu: &mut CPU, value: AS8) -> u16 {
-    let mut length = 1;
+    let mut length = 2;
     match value {
         AS8::A => cpu.reg.a = cpu.alu_swap(cpu.reg.a),
         AS8::B => cpu.reg.b = cpu.alu_swap(cpu.reg.b),
@@ -520,8 +521,8 @@ fn swap(cpu: &mut CPU, value: AS8) -> u16 {
             cpu.bus.write_byte(addr, new_value).unwrap();
         }
         AS8::D8 => {
-            cpu.alu_swap(cpu.read_next_byte());
-            length = 2;
+            cpu.alu_swap(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
         }
     };
     cpu.reg.pc.wrapping_add(length)
@@ -550,5 +551,5 @@ fn res(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
         }
         _ => panic!("Unsupported RES target: {:?}", target),
     };
-    cpu.reg.pc.wrapping_add(1)
+    cpu.reg.pc.wrapping_add(2)
 }

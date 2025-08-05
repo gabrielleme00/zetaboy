@@ -13,8 +13,7 @@ pub struct CPU {
     reg: Registers,
     pub bus: MemoryBus,
     halted: bool,
-    ime: bool, // interrupt master enable
-    steps_executed: u32,
+    pub ime: bool,
 }
 
 impl CPU {
@@ -24,39 +23,89 @@ impl CPU {
             bus: MemoryBus::new(cart_data),
             halted: false,
             ime: true,
-            steps_executed: 0,
         }
     }
 
     /// Emulates a CPU step. Returns the number of cycles taken.
     pub fn step(&mut self) -> Result<u8, &'static str> {
+        if self.ime && !self.halted {
+            if let Some(cycles) = self.handle_interrupts() {
+                return Ok(cycles);
+            }
+        }
+
         if self.halted {
-            return Ok(4);
+            // Check if any interrupt is pending to wake up from HALT
+            if self.bus.io.int_enable & self.bus.io.int_flag != 0 {
+                self.halted = false;
+            } else {
+                return Ok(4);
+            }
         }
 
         let mut opcode = self.bus.read_byte(self.reg.pc);
         let prefixed = opcode == 0xCB;
-
         if prefixed {
             opcode = self.read_next_byte();
-            self.reg.pc += 1;
         }
 
         let instruction = Instruction::from_byte(opcode, prefixed).unwrap_or_else(|| {
             panic!("Unknown instruction at ${:04X}: {:#04X}", self.reg.pc, opcode);
         });
 
-        // println!("${:0>4X} {:02X} {:?}", self.reg.pc, opcode, instruction);
-        // if self.reg.pc == 0x002F {
-        //     println!("$CFFB: 0x{:02X}", self.bus.read_byte(0xCFFB));
-        //     panic!("{}", self.reg);
-        // }
+        self.reg.pc = control_unit::execute(self, instruction);
 
-        let next_pc = control_unit::execute(self, instruction);
-        self.reg.pc = next_pc;
-        self.steps_executed += 1;
+        let cycles = instruction.cycles();
+        
+        // Step the timer and check for timer interrupt
+        let timer_interrupt = self.bus.timer.step(
+            cycles,
+            &mut self.bus.io.div,
+            &mut self.bus.io.tima,
+            self.bus.io.tma,
+            self.bus.io.tac
+        );
+        
+        if timer_interrupt {
+            self.request_interrupt(0b100); // Timer interrupt bit
+        }
 
-        Ok(instruction.cycles())
+        Ok(cycles)
+    }
+
+    fn handle_interrupts(&mut self) -> Option<u8> {
+        let pending = self.bus.io.int_enable & self.bus.io.int_flag;
+        if pending == 0 {
+            return None;
+        }
+
+        self.halted = false; // Exit HALT state if an interrupt is being handled
+        self.ime = false; // Disable further interrupts
+
+        for i in 0..5 {
+            let mask = 1 << i;
+            if pending & mask != 0 {
+                // Clear the interrupt flag
+                self.bus.io.int_flag &= !mask;
+
+                // Push the current PC onto the stack
+                self.alu_push(self.reg.pc);
+
+                // Jump to the interrupt vector
+                self.reg.pc = match i {
+                    0 => 0x40, // V-Blank
+                    1 => 0x48, // LCD STAT
+                    2 => 0x50, // Timer
+                    3 => 0x58, // Serial
+                    4 => 0x60, // Joypad
+                    _ => unreachable!(),
+                };
+
+                return Some(20); // Interrupt handling takes 20 cycles
+            }
+        }
+
+        None
     }
 
     // Helper functions
@@ -130,10 +179,14 @@ impl CPU {
     }
 
     /// Compares register A and the given `value` by calculating: A - `value`.
+    /// Updates flags as if subtraction occurred, but does not modify A.
     fn alu_cp(&mut self, value: u8) {
         let a = self.reg.a;
-        self.alu_sub(value);
-        self.reg.a = a;
+        let result = a.wrapping_sub(value);
+        self.reg.f.z = result == 0;
+        self.reg.f.n = true;
+        self.reg.f.h = (a & 0xF) < (value & 0xF);
+        self.reg.f.c = (a as u16) < (value as u16);
     }
 
     /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
