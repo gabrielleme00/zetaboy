@@ -81,6 +81,11 @@ impl MemoryBus {
                         self.timer.reset_div(&mut self.io.div);
                         Ok(())
                     },
+                    0xFF46 => { // DMA register - perform OAM DMA transfer
+                        self.io.write(address as u16, value);
+                        self.perform_dma_transfer(value);
+                        Ok(())
+                    },
                     0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address as u16, value),
                     0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address as u16, value),
                     _ => Ok(self.io.write(address as u16, value)),
@@ -92,7 +97,7 @@ impl MemoryBus {
                 }
                 Ok(self.hram[address - 0xFF80] = value)
             },
-            0xFFFF => Ok(self.io.int_flag = value & 0x1F),
+            0xFFFF => Ok(self.io.int_enable = value & 0x1F),
             _ => Err(format!("Invalid write address: {:#04X}", address)),
         }
     }
@@ -100,5 +105,25 @@ impl MemoryBus {
     pub fn write_word(&mut self, address: u16, value: u16) -> Result<(), String> {
         self.write_byte(address, (value & 0xFF) as u8)?;
         self.write_byte(address + 1, (value >> 8) as u8)
+    }
+
+    /// Performs DMA transfer to OAM
+    /// Copies 160 bytes from source address (value * 0x100) to OAM (0xFE00-0xFE9F)
+    fn perform_dma_transfer(&mut self, source_page: u8) {
+        let source_address = (source_page as u16) << 8; // source_page * 0x100
+        
+        // Copy 160 bytes (OAM size) from source to OAM area
+        for i in 0..160 {
+            let source_addr = source_address + i;
+            
+            // Read from source address
+            let byte = self.read_byte(source_addr);
+            
+            // Write to OAM through PPU
+            if let Err(_) = self.ppu.write_oam(i, byte) {
+                // Handle error if needed
+                break;
+            }
+        }
     }
 }

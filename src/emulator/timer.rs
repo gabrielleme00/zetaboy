@@ -17,8 +17,9 @@ impl Timer {
         }
     }
 
-    /// Steps the timer forward by the given number of CPU cycles
-    /// Returns true if a timer interrupt should be triggered
+    /// Steps the timer forward by the given number of CPU cycles.
+    /// 
+    /// Returns true if a timer interrupt should be triggered.
     pub fn step(&mut self, cycles: u8, div: &mut u8, tima: &mut u8, tma: u8, tac: u8) -> bool {
         let mut interrupt = false;
         

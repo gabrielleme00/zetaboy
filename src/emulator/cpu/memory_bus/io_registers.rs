@@ -251,11 +251,7 @@ impl IORegisters {
             REG_SCX => self.scx = value,
             REG_LY => (), // LY is read-only
             REG_LYC => self.lyc = value,
-            REG_DMA => {
-                self.dma = value;
-                // Initiate DMA transfer (implementation needed elsewhere)
-                println!("DMA transfer initiated from {:#04X}00", value);
-            }
+            REG_DMA => self.dma = value,
             REG_BGP => self.bgp = value,
             REG_OBP0 => self.obp0 = value,
             REG_OBP1 => self.obp1 = value,

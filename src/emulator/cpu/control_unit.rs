@@ -18,7 +18,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         DEC(value) => dec(cpu, value),
         DI => set_ime(cpu, false),
         EI => set_ime(cpu, true),
-        HALT => cpu.reg.pc,
+        HALT => halt(cpu),
         INC(value) => inc(cpu, value),
         JP(test) => jp(cpu, test),
         JPHL => cpu.reg.get_hl(),
@@ -30,6 +30,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         POP(target) => pop(cpu, target),
         PUSH(value) => push(cpu, value),
         RET(test) => ret(cpu, test),
+        RETI => reti(cpu),
         RLA => rla(cpu),
         RLCA => rlca(cpu),
         RRA => rra(cpu),
@@ -456,6 +457,14 @@ fn ret(cpu: &mut CPU, test: JumpCondition) -> u16 {
     }
 }
 
+fn reti(cpu: &mut CPU) -> u16 {
+    // RETI enables interrupts immediately (not delayed like EI)
+    cpu.ime = true;
+    // Clear any pending EI delay since we're enabling immediately
+    cpu.ei_delay = false;
+    cpu.alu_pop()
+}
+
 fn rla(cpu: &mut CPU) -> u16 {
     cpu.reg.a = cpu.alu_rl(cpu.reg.a);
     cpu.reg.f.z = false;
@@ -481,7 +490,18 @@ fn rrca(cpu: &mut CPU) -> u16 {
 }
 
 fn set_ime(cpu: &mut CPU, value: bool) -> u16 {
-    cpu.ime = value;
+    if value {
+        // EI: Enable interrupts after the next instruction
+        cpu.ei_delay = true;
+    } else {
+        // DI: Disable interrupts immediately
+        cpu.ime = false;
+    }
+    cpu.reg.pc.wrapping_add(1)
+}
+
+fn halt(cpu: &mut CPU) -> u16 {
+    cpu.set_halted(true);
     cpu.reg.pc.wrapping_add(1)
 }
 

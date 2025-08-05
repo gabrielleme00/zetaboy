@@ -3,8 +3,6 @@ mod instructions;
 pub mod memory_bus;
 mod registers;
 
-use core::panic;
-
 use instructions::*;
 use memory_bus::*;
 use registers::*;
@@ -14,6 +12,7 @@ pub struct CPU {
     pub bus: MemoryBus,
     halted: bool,
     pub ime: bool,
+    pub ei_delay: bool, // EI instruction has delayed effect
 }
 
 impl CPU {
@@ -22,12 +21,19 @@ impl CPU {
             reg: Registers::new(),
             bus: MemoryBus::new(cart_data),
             halted: false,
-            ime: true,
+            ime: false,
+            ei_delay: false,
         }
     }
 
     /// Emulates a CPU step. Returns the number of cycles taken.
     pub fn step(&mut self) -> Result<u8, &'static str> {
+        // Handle delayed EI: enable interrupts after the instruction following EI
+        if self.ei_delay {
+            self.ime = true;
+            self.ei_delay = false;
+        }
+
         if self.ime && !self.halted {
             if let Some(cycles) = self.handle_interrupts() {
                 return Ok(cycles);
@@ -38,6 +44,12 @@ impl CPU {
             // Check if any interrupt is pending to wake up from HALT
             if self.bus.io.int_enable & self.bus.io.int_flag != 0 {
                 self.halted = false;
+                // If IME is disabled, there's a halt bug where PC doesn't increment
+                if !self.ime {
+                    // HALT bug: when waking from HALT with IME=0, the next instruction is executed twice
+                    // For now, we'll just continue normally but this should be properly implemented
+                    panic!("HALT bug: PC should not increment when IME=0");
+                }
             } else {
                 return Ok(4);
             }
@@ -54,7 +66,6 @@ impl CPU {
         });
 
         self.reg.pc = control_unit::execute(self, instruction);
-
         let cycles = instruction.cycles();
         
         // Step the timer and check for timer interrupt
@@ -334,6 +345,11 @@ impl CPU {
 
     pub fn request_interrupt(&mut self, interrupt: u8) {
         self.bus.io.int_flag |= interrupt;
+    }
+
+    /// Sets the CPU halted state
+    pub fn set_halted(&mut self, halted: bool) {
+        self.halted = halted;
     }
 
     /// Swaps the nibbles of a byte.

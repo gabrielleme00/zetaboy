@@ -8,7 +8,7 @@ pub enum FlagCondition {
 
 #[derive(Debug, Clone, Copy)]
 pub enum JumpCondition {
-    Always,
+    Always, // TODO: Use Option<FlagCondition>
     Flag(FlagCondition),
 }
 

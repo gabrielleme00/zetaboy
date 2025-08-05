@@ -27,7 +27,7 @@ impl Emulator {
         let (width, height) = (WIDTH, HEIGHT);
         let options = WindowOptions {
             resize: true,
-            scale: minifb::Scale::X4,
+            scale: minifb::Scale::X1,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
         };
@@ -64,9 +64,17 @@ impl Emulator {
         let bgp = self.cpu.bus.read_byte(0xFF47);
         self.cpu.bus.ppu.step(cycles, bgp, &mut self.cpu.bus.io);
 
-        if self.cpu.bus.ppu.vblank_int != 0 {
-            self.cpu.request_interrupt(self.cpu.bus.ppu.vblank_int);
-            self.cpu.bus.ppu.vblank_int = 0;
+        if self.cpu.bus.ppu.int != 0 {
+            // Handle VBlank interrupt (bit 0)
+            if self.cpu.bus.ppu.int & 0b1 != 0 {
+                self.cpu.request_interrupt(0b1);
+            }
+            // Handle LCD STAT interrupt (bit 1)
+            if self.cpu.bus.ppu.int & 0b10 != 0 {
+                self.cpu.request_interrupt(0b10);
+            }
+            // Clear all PPU interrupt flags
+            self.cpu.bus.ppu.int = 0;
         }
         let lcd_enabled = self.cpu.bus.io.lcdc & 0x80 != 0;
         let vblank = self.cpu.bus.ppu.is_vblank();

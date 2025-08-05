@@ -23,7 +23,7 @@ pub struct PPU {
     pub mode: PPUMode,
     line: u8, // LY
     dot_counter: u16,
-    pub vblank_int: u8,
+    pub int: u8,
 }
 
 impl PPU {
@@ -37,7 +37,7 @@ impl PPU {
             mode: PPUMode::OAMSearch,
             line: 0,
             dot_counter: 0,
-            vblank_int: 0,
+            int: 0,
         };
         // Fill the first tile with a simple pattern for testing
         for i in 0..8 {
@@ -143,7 +143,7 @@ impl PPU {
         let new_mode = if self.line >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
             if previous_line == 143 {
-                self.vblank_int |= 0b00000001;
+                self.int |= 0b1;
             }
             PPUMode::VBlank
         } else {
@@ -186,7 +186,7 @@ impl PPU {
         if !previous_ly_eq_lyc && new_ly_eq_lyc {
             // The condition just became true, check if interrupt is enabled
             if (io_registers.stat & 0b01000000) != 0 {
-                self.vblank_int |= 0b00000010;
+                self.int |= 0b10;
             }
         }
     }
@@ -202,15 +202,15 @@ impl PPU {
         if current_mode != previous_mode {
             // H-Blank Interrupt
             if current_mode == PPUMode::HBlank && (stat & 0b00001000) != 0 {
-                self.vblank_int |= 0b00000010;
+                self.int |= 0b10;
             }
             // V-Blank Interrupt
             else if current_mode == PPUMode::VBlank && (stat & 0b00010000) != 0 {
-                self.vblank_int |= 0b00000010;
+                self.int |= 0b10;
             }
             // OAM Search Interrupt
             else if current_mode == PPUMode::OAMSearch && (stat & 0b00100000) != 0 {
-                self.vblank_int |= 0b00000010;
+                self.int |= 0b10;
             }
         }
     }

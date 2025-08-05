@@ -18,7 +18,7 @@ pub enum Instruction {
     JRIF(FlagCondition),
     CALL(JumpCondition),
     RET(JumpCondition),
-    // RETI,
+    RETI,
     RST(u16),
 
     // ALU (8-bit)
@@ -416,6 +416,7 @@ impl Instruction {
             0xD4 => S(CALL(JC::Flag(FC::NotCarry))),
             0xD5 => S(PUSH(ST::DE)),
             0xD8 => S(RET(JC::Flag(FC::Carry))),
+            0xD9 => S(RETI),
             0xDA => S(JP(JC::Flag(FC::Carry))),
             0xDB => None,
             0xDC => S(CALL(JC::Flag(FC::Carry))),
