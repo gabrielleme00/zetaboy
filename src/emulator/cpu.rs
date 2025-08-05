@@ -352,7 +352,33 @@ impl CPU {
         self.halted = halted;
     }
 
+    /// Shifts `value` left into Carry. LSB of `value` set to 0.
+    /// 
+    /// Updates flags Z, N, H and C.
+    pub fn alu_sla(&mut self, value: u8) -> u8 {
+        let old_bit_7 = (value & 0x80) >> 7;
+        let new_value = value << 1;
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_7 == 1;
+        new_value
+    }
+
+    pub fn alu_sra(&mut self, value: u8) -> u8 {
+        let old_bit_0 = value & 1;
+        let msb = value & 0x80; // Preserve the most significant bit
+        let new_value = (value >> 1) | msb;
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
+
     /// Swaps the nibbles of a byte.
+    /// 
+    /// Updates flags Z, N, H and C.
     pub fn alu_swap(&mut self, value: u8) -> u8 {
         let new_value = ((value & 0xF0) >> 4) | ((value & 0x0F) << 4);
         self.reg.f.z = new_value == 0;

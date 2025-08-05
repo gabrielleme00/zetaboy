@@ -41,6 +41,8 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         XOR(value) => xor(cpu, value),
         // Prefixed
         RES(bit, target) => res(cpu, bit, target),
+        SLA(target) => sla(cpu, target),
+        SRA(target) => sra(cpu, target),
         SWAP(source) => swap(cpu, source),
         // _ => cpu.reg.pc, /* TODO: support more instructions */
     }
@@ -519,6 +521,54 @@ fn xor(cpu: &mut CPU, value: AS8) -> u16 {
         AS8::D8 => {
             cpu.alu_xor(cpu.read_next_byte());
             length = 2;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn sla(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_sla(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_sla(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_sla(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_sla(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_sla(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_sla(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_sla(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_sla(value);
+            cpu.bus.write_byte(addr, new_value).unwrap();
+        }
+        AS8::D8 => {
+            cpu.alu_sla(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn sra(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_sra(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_sra(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_sra(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_sra(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_sra(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_sra(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_sra(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_sra(value);
+            cpu.bus.write_byte(addr, new_value).unwrap();
+        }
+        AS8::D8 => {
+            cpu.alu_sra(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
         }
     };
     cpu.reg.pc.wrapping_add(length)
