@@ -62,21 +62,24 @@ impl CPU {
         }
 
         let instruction = Instruction::from_byte(opcode, prefixed).unwrap_or_else(|| {
-            panic!("Unknown instruction at ${:04X}: {:#04X}", self.reg.pc, opcode);
+            panic!(
+                "Unknown instruction at ${:04X}: {:#04X}",
+                self.reg.pc, opcode
+            );
         });
 
         self.reg.pc = control_unit::execute(self, instruction);
         let cycles = instruction.cycles();
-        
+
         // Step the timer and check for timer interrupt
         let timer_interrupt = self.bus.timer.step(
             cycles,
             &mut self.bus.io.div,
             &mut self.bus.io.tima,
             self.bus.io.tma,
-            self.bus.io.tac
+            self.bus.io.tac,
         );
-        
+
         if timer_interrupt {
             self.request_interrupt(0b100); // Timer interrupt bit
         }
@@ -353,7 +356,7 @@ impl CPU {
     }
 
     /// Shifts `value` left into Carry. LSB of `value` set to 0.
-    /// 
+    ///
     /// Updates flags Z, N, H and C.
     pub fn alu_sla(&mut self, value: u8) -> u8 {
         let old_bit_7 = (value & 0x80) >> 7;
@@ -365,6 +368,9 @@ impl CPU {
         new_value
     }
 
+    /// Shifts `value` right into Carry. MSB of `value` set to 0.
+    ///
+    /// Updates flags Z, N, H and C.
     pub fn alu_sra(&mut self, value: u8) -> u8 {
         let old_bit_0 = value & 1;
         let msb = value & 0x80; // Preserve the most significant bit
@@ -376,8 +382,21 @@ impl CPU {
         new_value
     }
 
+    /// Shifts `value` right into Carry. MSB of `value` set to 0.
+    ///
+    /// Updates flags Z, N, H and C.
+    pub fn alu_srl(&mut self, value: u8) -> u8 {
+        let old_bit_0 = value & 1;
+        let new_value = value >> 1;
+        self.reg.f.z = new_value == 0;
+        self.reg.f.n = false;
+        self.reg.f.h = false;
+        self.reg.f.c = old_bit_0 == 1;
+        new_value
+    }
+
     /// Swaps the nibbles of a byte.
-    /// 
+    ///
     /// Updates flags Z, N, H and C.
     pub fn alu_swap(&mut self, value: u8) -> u8 {
         let new_value = ((value & 0xF0) >> 4) | ((value & 0x0F) << 4);
@@ -386,5 +405,20 @@ impl CPU {
         self.reg.f.h = false;
         self.reg.f.c = false;
         new_value
+    }
+
+    /// Performs a bitwise AND operation with the A register (accumulator) and sets flags.
+    ///
+    /// Updates flags Z, N, and H.
+    pub fn alu_bit(&mut self, bit: u8, value: u8) {
+        if bit < 8 {
+            let mask = 1 << bit;
+            self.reg.f.z = (value & mask) == 0;
+        } else {
+            self.reg.f.z = true; // or handle as appropriate
+        }
+        self.reg.f.n = false;
+        self.reg.f.h = true; // Half-carry is always set for BIT
+                             // Carry flag is not affected by BIT
     }
 }

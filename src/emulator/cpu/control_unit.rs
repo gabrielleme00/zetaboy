@@ -40,9 +40,11 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         SUB(source) => sub(cpu, source),
         XOR(value) => xor(cpu, value),
         // Prefixed
+        BIT(bit, target) => set_bit(cpu, bit, target),
         RES(bit, target) => res(cpu, bit, target),
         SLA(target) => sla(cpu, target),
         SRA(target) => sra(cpu, target),
+        SRL(target) => srl(cpu, target),
         SWAP(source) => swap(cpu, source),
         // _ => cpu.reg.pc, /* TODO: support more instructions */
     }
@@ -574,6 +576,30 @@ fn sra(cpu: &mut CPU, target: AS8) -> u16 {
     cpu.reg.pc.wrapping_add(length)
 }
 
+fn srl(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_srl(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_srl(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_srl(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_srl(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_srl(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_srl(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_srl(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_srl(value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_srl(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
 fn swap(cpu: &mut CPU, value: AS8) -> u16 {
     let mut length = 2;
     match value {
@@ -601,6 +627,27 @@ fn swap(cpu: &mut CPU, value: AS8) -> u16 {
 fn rst(cpu: &mut CPU, value: u16) -> u16 {
     cpu.alu_push(cpu.reg.pc.wrapping_add(1));
     value
+}
+
+/// Sets a bit in the specified target register or memory location.
+fn set_bit(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
+    let mask = 1 << bit;
+    match target {
+        AS8::A => cpu.alu_bit(cpu.reg.a, mask),
+        AS8::B => cpu.alu_bit(cpu.reg.b, mask),
+        AS8::C => cpu.alu_bit(cpu.reg.c, mask),
+        AS8::D => cpu.alu_bit(cpu.reg.d, mask),
+        AS8::E => cpu.alu_bit(cpu.reg.e, mask),
+        AS8::H => cpu.alu_bit(cpu.reg.h, mask),
+        AS8::L => cpu.alu_bit(cpu.reg.l, mask),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            cpu.alu_bit(value, mask);
+        }
+        _ => panic!("Unsupported BIT target: {:?}", target),
+    };
+    cpu.reg.pc.wrapping_add(2)
 }
 
 /// Resets a bit in the specified target register or memory location.
