@@ -11,10 +11,12 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         ADC(source) => adc(cpu, source),
         ADD(source) => add(cpu, source),
         ADDHL(value) => add_hl(cpu, value),
+        ADDSP => add_sp(cpu),
         AND(source) => and(cpu, source),
         CALL(test) => call(cpu, test),
         CP(value) => cp(cpu, value),
         CPL => cpl(cpu),
+        DAA => daa(cpu),
         DEC(value) => dec(cpu, value),
         DI => set_ime(cpu, false),
         EI => set_ime(cpu, true),
@@ -37,11 +39,16 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         RRCA => rrca(cpu),
         RST(value) => rst(cpu, value),
         SBC(source) => sbc(cpu, source),
+        STOP => stop(cpu),
         SUB(source) => sub(cpu, source),
         XOR(value) => xor(cpu, value),
         // Prefixed
         BIT(bit, target) => set_bit(cpu, bit, target),
         RES(bit, target) => res(cpu, bit, target),
+        RLC(target) => rlc(cpu, target),
+        RRC(target) => rrc(cpu, target),
+        RL(target) => rl(cpu, target),
+        RR(target) => rr(cpu, target),
         SLA(target) => sla(cpu, target),
         SRA(target) => sra(cpu, target),
         SRL(target) => srl(cpu, target),
@@ -107,6 +114,26 @@ fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
     cpu.reg.pc.wrapping_add(length)
 }
 
+/// Execution of a STOP instruction stops both the system clock and oscillator
+/// circuit.
+/// STOP mode is entered and the LCD controller also stops.
+/// However, the status of the internal RAM register ports remains unchanged.
+/// 
+/// STOP mode can be cancelled by a reset signal.
+/// 
+/// If the RESET terminal goes LOW in STOP mode, it becomes that of a normal
+/// reset status.
+/// 
+/// The following conditions should be met before a STOP instruction is executed
+/// and stop mode is entered:
+/// 
+/// - All interrupt-enable (IE) flags are reset.
+/// - Input to P10-P13 is LOW for all.
+fn stop(cpu: &mut CPU) -> u16 {
+    cpu.set_stopped(true);
+    cpu.reg.pc.wrapping_add(2)
+}
+
 fn sub(cpu: &mut CPU, source: AS8) -> u16 {
     let mut length = 1;
     cpu.alu_sub(match source {
@@ -134,6 +161,12 @@ fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
         AS16::SP => cpu.alu_add_hl(cpu.reg.sp),
     };
     cpu.reg.pc.wrapping_add(1)
+}
+
+fn add_sp(cpu: &mut CPU) -> u16 {
+    let offset = cpu.read_next_byte() as i8;
+    cpu.reg.sp = cpu.reg.sp.wrapping_add(offset as u16);
+    cpu.reg.pc.wrapping_add(2)
 }
 
 fn call(cpu: &mut CPU, test: Option<FlagCondition>) -> u16 {
@@ -172,6 +205,11 @@ fn cpl(cpu: &mut CPU) -> u16 {
     cpu.reg.a = !cpu.reg.a;
     cpu.reg.f.n = true;
     cpu.reg.f.h = true;
+    cpu.reg.pc.wrapping_add(1)
+}
+
+fn daa(cpu: &mut CPU) -> u16 {
+    cpu.alu_daa();
     cpu.reg.pc.wrapping_add(1)
 }
 
@@ -288,7 +326,13 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             let source_value = match source {
                 LWS::D16 => cpu.read_next_word(),
                 LWS::HL => cpu.reg.get_hl(),
-                LWS::SP => cpu.reg.sp,
+                LWS::SP => match target {
+                    LWT::HL => {
+                        // 0xF8 - LD HL, SP+s8
+                        cpu.reg.sp.wrapping_add(cpu.read_next_byte() as u16)
+                    },
+                    _ => cpu.reg.sp,
+                },
             };
             match target {
                 LWT::HL => cpu.reg.set_hl(source_value),
@@ -528,6 +572,102 @@ fn xor(cpu: &mut CPU, value: AS8) -> u16 {
     cpu.reg.pc.wrapping_add(length)
 }
 
+fn rlc(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_rlc(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_rlc(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_rlc(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_rlc(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_rlc(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_rlc(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_rlc(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_rlc(value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_rlc(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn rrc(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_rrc(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_rrc(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_rrc(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_rrc(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_rrc(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_rrc(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_rrc(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_rrc(value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_rrc(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn rl(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_rl(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_rl(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_rl(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_rl(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_rl(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_rl(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_rl(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_rl(value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_rl(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn rr(cpu: &mut CPU, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_rr(cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_rr(cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_rr(cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_rr(cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_rr(cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_rr(cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_rr(cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_rr(value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_rr(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
 fn sla(cpu: &mut CPU, target: AS8) -> u16 {
     let mut length = 2;
     match target {
@@ -629,21 +769,20 @@ fn rst(cpu: &mut CPU, value: u16) -> u16 {
     value
 }
 
-/// Sets a bit in the specified target register or memory location.
+/// Tests a bit in the specified target register or memory location (BIT instruction).
 fn set_bit(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
-    let mask = 1 << bit;
     match target {
-        AS8::A => cpu.alu_bit(cpu.reg.a, mask),
-        AS8::B => cpu.alu_bit(cpu.reg.b, mask),
-        AS8::C => cpu.alu_bit(cpu.reg.c, mask),
-        AS8::D => cpu.alu_bit(cpu.reg.d, mask),
-        AS8::E => cpu.alu_bit(cpu.reg.e, mask),
-        AS8::H => cpu.alu_bit(cpu.reg.h, mask),
-        AS8::L => cpu.alu_bit(cpu.reg.l, mask),
+        AS8::A => cpu.alu_bit(bit, cpu.reg.a),
+        AS8::B => cpu.alu_bit(bit, cpu.reg.b),
+        AS8::C => cpu.alu_bit(bit, cpu.reg.c),
+        AS8::D => cpu.alu_bit(bit, cpu.reg.d),
+        AS8::E => cpu.alu_bit(bit, cpu.reg.e),
+        AS8::H => cpu.alu_bit(bit, cpu.reg.h),
+        AS8::L => cpu.alu_bit(bit, cpu.reg.l),
         AS8::HLI => {
             let addr = cpu.reg.get_hl();
             let value = cpu.bus.read_byte(addr);
-            cpu.alu_bit(value, mask);
+            cpu.alu_bit(bit, value);
         }
         _ => panic!("Unsupported BIT target: {:?}", target),
     };

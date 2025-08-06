@@ -89,10 +89,7 @@ impl PPU {
         if address < self.bg_palette.len() as u16 {
             self.bg_palette[address as usize] = value;
         } else {
-            panic!(
-                "Warning: BG Palette RAM write out of bounds: {:#04X} = {:#02X}",
-                address, value
-            )
+            self.bg_palette[(address - 0xFF68) as usize] = value;
         }
     }
 

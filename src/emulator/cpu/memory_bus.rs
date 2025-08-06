@@ -86,12 +86,7 @@ impl MemoryBus {
                 0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address as u16, value),
                 _ => self.io.write(address as u16, value),
             },
-            0xFF80..=0xFFFE => {
-                if address == 0xFF80 && value == 0xFF {
-                    panic!();
-                }
-                self.hram[address - 0xFF80] = value
-            }
+            0xFF80..=0xFFFE => self.hram[address - 0xFF80] = value,
             0xFFFF => self.io.int_enable = value & 0x1F,
             _ => println!("Invalid write address: {:#04X}", address),
         };

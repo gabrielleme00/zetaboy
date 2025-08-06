@@ -11,6 +11,7 @@ pub struct CPU {
     reg: Registers,
     pub bus: MemoryBus,
     halted: bool,
+    stopped: bool,
     pub ime: bool,
     pub ei_delay: bool, // EI instruction has delayed effect
 }
@@ -21,6 +22,7 @@ impl CPU {
             reg: Registers::new(),
             bus: MemoryBus::new(cart_data),
             halted: false,
+            stopped: false,
             ime: false,
             ei_delay: false,
         }
@@ -32,6 +34,14 @@ impl CPU {
         if self.ei_delay {
             self.ime = true;
             self.ei_delay = false;
+        }
+
+        // Check if CPU is in STOP mode
+        if self.stopped {
+            // STOP mode can only be exited by specific events (like joypad input)
+            // For now, we'll just return 4 cycles and stay stopped
+            // TODO: Implement proper STOP wake-up conditions
+            return Ok(4);
         }
 
         if self.ime && !self.halted {
@@ -63,8 +73,8 @@ impl CPU {
 
         let instruction = Instruction::from_byte(opcode, prefixed).unwrap_or_else(|| {
             panic!(
-                "Unknown instruction at ${:04X}: {:#04X}",
-                self.reg.pc, opcode
+                "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
+                self.reg.pc, opcode, prefixed
             );
         });
 
@@ -157,6 +167,13 @@ impl CPU {
         }
     }
 
+    pub fn set_stopped(&mut self, stopped: bool) {
+        if stopped {
+            self.halted = false; // Stop state cannot be combined with HALT
+        }
+        self.stopped = stopped;
+    }
+
     // --- ALU ---
     // TODO: create a separate module for the ALU
 
@@ -201,6 +218,42 @@ impl CPU {
         self.reg.f.n = true;
         self.reg.f.h = (a & 0xF) < (value & 0xF);
         self.reg.f.c = (a as u16) < (value as u16);
+    }
+
+    /// Adjusts the A register (accumulator) to a binary-coded decimal (BCD)
+    /// number after BCD addition and subtraction operations.
+    fn alu_daa(&mut self) {
+        let mut a = self.reg.a;
+        let mut correction = 0;
+        let mut set_carry = false;
+
+        if !self.reg.f.n {
+            // After addition
+            if self.reg.f.h || (a & 0x0F) > 0x09 {
+                correction |= 0x06;
+            }
+            if self.reg.f.c || a > 0x99 {
+                correction |= 0x60;
+                set_carry = true;
+            }
+            a = a.wrapping_add(correction);
+        } else {
+            // After subtraction
+            if self.reg.f.h {
+                correction |= 0x06;
+            }
+            if self.reg.f.c {
+                correction |= 0x60;
+            }
+            a = a.wrapping_sub(correction);
+        }
+
+        self.reg.f.z = a == 0;
+        self.reg.f.h = false;
+        if set_carry {
+            self.reg.f.c = true;
+        }
+        self.reg.a = a;
     }
 
     /// Decrements 1 from the `value` and returns it. Updates flags Z, N and H.
@@ -419,6 +472,6 @@ impl CPU {
         }
         self.reg.f.n = false;
         self.reg.f.h = true; // Half-carry is always set for BIT
-                             // Carry flag is not affected by BIT
+        // Carry flag is not affected by BIT
     }
 }
