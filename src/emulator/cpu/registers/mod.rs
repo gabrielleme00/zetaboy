@@ -19,8 +19,8 @@ impl std::fmt::Display for Registers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "A: ${:02X} B: ${:02X} C: ${:02X} D: ${:02X} E: ${:02X} F: [{}] H: ${:02X} L: ${:02X} PC: ${:04X} SP: ${:04X}",
-            self.a, self.b, self.c, self.d, self.e, self.f, self.h, self.l, self.pc, self.sp
+            "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X}",
+            self.a, u8::from(self.f), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.pc
         )
     }
 }

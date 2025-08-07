@@ -9,6 +9,8 @@ use minifb::{Key, Window, WindowOptions};
 use ppu::{HEIGHT, WIDTH};
 use std::error::Error;
 
+const PRINT_CART_INFO: bool = false;
+
 pub struct Emulator {
     window: Window,
     paused: bool,
@@ -22,7 +24,10 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(filename: &str) -> Result<Self, Box<dyn Error>> {
         let cart = Cart::new(filename)?;
-        cart.print_info();
+
+        if PRINT_CART_INFO {
+            cart.print_info();
+        }
 
         let name = format!("ZetaBoy - {}", cart.get_title());
         let (width, height) = (WIDTH, HEIGHT);
@@ -43,7 +48,7 @@ impl Emulator {
             running: true,
             ticks: 0,
             cycles: 0,
-            cpu: CPU::new(&cart.rom_data),
+            cpu: CPU::new(cart),
             prev_vblank: false,
         })
     }

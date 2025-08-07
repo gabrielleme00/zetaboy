@@ -3,6 +3,7 @@ mod instructions;
 pub mod memory_bus;
 mod registers;
 
+use crate::emulator::cart::Cart;
 use instructions::*;
 use memory_bus::*;
 use registers::*;
@@ -11,18 +12,16 @@ pub struct CPU {
     reg: Registers,
     pub bus: MemoryBus,
     halted: bool,
-    stopped: bool,
     pub ime: bool,
     pub ei_delay: bool, // EI instruction has delayed effect
 }
 
 impl CPU {
-    pub fn new(cart_data: &Vec<u8>) -> Self {
+    pub fn new(cart: Cart) -> Self {
         Self {
             reg: Registers::new(),
-            bus: MemoryBus::new(cart_data),
+            bus: MemoryBus::new(cart),
             halted: false,
-            stopped: false,
             ime: false,
             ei_delay: false,
         }
@@ -34,14 +33,6 @@ impl CPU {
         if self.ei_delay {
             self.ime = true;
             self.ei_delay = false;
-        }
-
-        // Check if CPU is in STOP mode
-        if self.stopped {
-            // STOP mode can only be exited by specific events (like joypad input)
-            // For now, we'll just return 4 cycles and stay stopped
-            // TODO: Implement proper STOP wake-up conditions
-            return Ok(4);
         }
 
         if self.ime && !self.halted {
@@ -77,6 +68,15 @@ impl CPU {
                 self.reg.pc, opcode, prefixed
             );
         });
+
+        println!(
+            "{} PCMEM:{:02X},{:02X},{:02X},{:02X}",
+            self.reg,
+            self.bus.read_byte(self.reg.pc),
+            self.bus.read_byte(self.reg.pc.wrapping_add(1)),
+            self.bus.read_byte(self.reg.pc.wrapping_add(2)),
+            self.bus.read_byte(self.reg.pc.wrapping_add(3))
+        );
 
         self.reg.pc = control_unit::execute(self, instruction);
         let cycles = instruction.cycles();
@@ -165,13 +165,6 @@ impl CPU {
             None => true,
             Some(fc) => self.test_flag_condition(fc),
         }
-    }
-
-    pub fn set_stopped(&mut self, stopped: bool) {
-        if stopped {
-            self.halted = false; // Stop state cannot be combined with HALT
-        }
-        self.stopped = stopped;
     }
 
     // --- ALU ---
@@ -286,7 +279,7 @@ impl CPU {
     fn alu_rl(&mut self, value: u8) -> u8 {
         let old_bit_0 = (value & 0x80) >> 7;
         let new_value = (value << 1) | (self.reg.f.c as u8);
-        self.reg.f.z = false;
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
         self.reg.f.c = old_bit_0 == 1;
@@ -297,18 +290,19 @@ impl CPU {
     fn alu_rlc(&mut self, value: u8) -> u8 {
         let old_bit_0 = (value & 0x80) >> 7;
         let new_value = (value << 1) | old_bit_0;
-        self.reg.f.z = false;
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
         self.reg.f.c = old_bit_0 == 1;
         new_value
     }
 
-    /// Rotates A to the right through Carry flag.
+    /// Rotates value to the right through Carry flag.
+    /// Bit 0 is copied to Carry, previous Carry is copied to bit 7.
     fn alu_rr(&mut self, value: u8) -> u8 {
         let old_bit_0 = value & 1;
         let new_value = (value >> 1) | ((self.reg.f.c as u8) << 7);
-        self.reg.f.z = false;
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
         self.reg.f.c = old_bit_0 == 1;
@@ -319,7 +313,7 @@ impl CPU {
     fn alu_rrc(&mut self, value: u8) -> u8 {
         let old_bit_0 = value & 1;
         let new_value = (value >> 1) | (old_bit_0 << 7);
-        self.reg.f.z = false;
+        self.reg.f.z = new_value == 0;
         self.reg.f.n = false;
         self.reg.f.h = false;
         self.reg.f.c = old_bit_0 == 1;
@@ -472,6 +466,6 @@ impl CPU {
         }
         self.reg.f.n = false;
         self.reg.f.h = true; // Half-carry is always set for BIT
-        // Carry flag is not affected by BIT
+                             // Carry flag is not affected by BIT
     }
 }

@@ -6,6 +6,11 @@ use std::{error::Error, fs, path::Path};
 pub struct Cart {
     pub rom_data: Vec<u8>,
     header: Header,
+    // MBC state
+    rom_bank: usize,
+    ram_bank: usize,
+    ram_enabled: bool,
+    ram_data: Vec<u8>,
 }
 
 struct Header {
@@ -27,7 +32,26 @@ impl Cart {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let rom_data = fs::read(path)?;
         let header = Header::new(&rom_data);
-        Ok(Self { rom_data, header })
+        
+        // Initialize RAM based on header info
+        let ram_size = match header.ram_size {
+            0 => 0,
+            1 => 0, // Unused
+            2 => 8 * 1024,      // 8 kB
+            3 => 32 * 1024,     // 32 kB
+            4 => 128 * 1024,    // 128 kB
+            5 => 64 * 1024,     // 64 kB
+            _ => 0,
+        };
+        
+        Ok(Self { 
+            rom_data, 
+            header,
+            rom_bank: 1, // Start at bank 1 (bank 0 is fixed)
+            ram_bank: 0,
+            ram_enabled: false,
+            ram_data: vec![0; ram_size],
+        })
     }
 
     pub fn print_info(&self) {
@@ -49,6 +73,89 @@ impl Cart {
 
     pub fn get_title(&self) -> String {
         self.header.title_to_string()
+    }
+
+    /// Read from ROM area (0x0000-0x7FFF)
+    pub fn read_rom(&self, address: u16) -> u8 {
+        let address = address as usize;
+        match address {
+            0x0000..=0x3FFF => {
+                // Bank 0 is always fixed
+                if address < self.rom_data.len() {
+                    self.rom_data[address]
+                } else {
+                    0xFF
+                }
+            }
+            0x4000..=0x7FFF => {
+                // Switchable ROM bank
+                let bank_offset = 0x4000 * self.rom_bank;
+                let real_address = bank_offset + (address - 0x4000);
+                if real_address < self.rom_data.len() {
+                    self.rom_data[real_address]
+                } else {
+                    0xFF
+                }
+            }
+            _ => 0xFF,
+        }
+    }
+
+    /// Write to ROM area (triggers MBC operations)
+    pub fn write_rom(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => {
+                // RAM Enable
+                self.ram_enabled = (value & 0x0F) == 0x0A;
+            }
+            0x2000..=0x3FFF => {
+                // ROM Bank Number (lower 5 bits)
+                let bank = (value & 0x1F) as usize;
+                // Bank 0 is treated as bank 1
+                self.rom_bank = if bank == 0 { 1 } else { bank };
+            }
+            0x4000..=0x5FFF => {
+                // RAM Bank Number or upper ROM bank bits
+                self.ram_bank = (value & 0x03) as usize;
+            }
+            0x6000..=0x7FFF => {
+                // Banking Mode Select (for advanced MBCs)
+                // For now, we'll ignore this
+            }
+            _ => {}
+        }
+    }
+
+    /// Read from RAM area (0xA000-0xBFFF)
+    pub fn read_ram(&self, address: u16) -> u8 {
+        if !self.ram_enabled || self.ram_data.is_empty() {
+            return 0xFF;
+        }
+
+        let address = (address - 0xA000) as usize;
+        let bank_offset = 0x2000 * self.ram_bank;
+        let real_address = bank_offset + address;
+
+        if real_address < self.ram_data.len() {
+            self.ram_data[real_address]
+        } else {
+            0xFF
+        }
+    }
+
+    /// Write to RAM area (0xA000-0xBFFF)
+    pub fn write_ram(&mut self, address: u16, value: u8) {
+        if !self.ram_enabled || self.ram_data.is_empty() {
+            return;
+        }
+
+        let address = (address - 0xA000) as usize;
+        let bank_offset = 0x2000 * self.ram_bank;
+        let real_address = bank_offset + address;
+
+        if real_address < self.ram_data.len() {
+            self.ram_data[real_address] = value;
+        }
     }
 
     fn is_checksum_valid(&self) -> bool {

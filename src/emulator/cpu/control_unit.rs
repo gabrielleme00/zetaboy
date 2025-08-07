@@ -130,7 +130,6 @@ fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
 /// - All interrupt-enable (IE) flags are reset.
 /// - Input to P10-P13 is LOW for all.
 fn stop(cpu: &mut CPU) -> u16 {
-    cpu.set_stopped(true);
     cpu.reg.pc.wrapping_add(2)
 }
 
@@ -164,8 +163,17 @@ fn add_hl(cpu: &mut CPU, value: AS16) -> u16 {
 }
 
 fn add_sp(cpu: &mut CPU) -> u16 {
-    let offset = cpu.read_next_byte() as i8;
-    cpu.reg.sp = cpu.reg.sp.wrapping_add(offset as u16);
+    let offset = cpu.read_next_byte() as i8 as i16;
+    let sp = cpu.reg.sp;
+    let result = (sp as i16).wrapping_add(offset) as u16;
+
+    // Flags: Z = 0, N = 0, H and C set according to lower byte addition
+    cpu.reg.f.z = false;
+    cpu.reg.f.n = false;
+    cpu.reg.f.h = ((sp & 0xF) + ((offset as u16) & 0xF)) > 0xF;
+    cpu.reg.f.c = ((sp & 0xFF) + ((offset as u16) & 0xFF)) > 0xFF;
+
+    cpu.reg.sp = result;
     cpu.reg.pc.wrapping_add(2)
 }
 
@@ -329,7 +337,12 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                 LWS::SP => match target {
                     LWT::HL => {
                         // 0xF8 - LD HL, SP+s8
-                        cpu.reg.sp.wrapping_add(cpu.read_next_byte() as u16)
+                        let r8 = cpu.read_next_byte() as i8 as i16;
+                        cpu.reg.f.z = false;
+                        cpu.reg.f.n = false;
+                        cpu.reg.f.h = ((cpu.reg.sp & 0xF) + (r8 as u16 & 0xF)) > 0xF;
+                        cpu.reg.f.c = ((cpu.reg.sp & 0xFF) + (r8 as u16 & 0xFF)) > 0xFF;
+                        cpu.reg.sp.wrapping_add(r8 as u16)
                     },
                     _ => cpu.reg.sp,
                 },
@@ -347,7 +360,8 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             cpu.reg.pc.wrapping_add(match (target, source) {
                 (LWT::A16, _) => 3, // A16 target always uses 3 bytes (opcode + 2-byte address)
                 (_, LWS::D16) => 3, // D16 source uses 3 bytes (opcode + 2-byte immediate)
-                _ => 1,                        // Register to register operations are 1 byte
+                (_, LWS::SP) => 2,  // SP source uses 2 bytes (opcode + 1-byte offset)
+                _ => 1,             // Register to register operations are 1 byte
             })
         }
         LT::IndirectFromA(target) => {
