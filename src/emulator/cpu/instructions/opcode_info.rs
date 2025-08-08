@@ -34,8 +34,8 @@ impl OpcodeInfo {
 
     pub fn from_byte(byte: u8, prefixed: bool) -> Option<&'static Self> {
         match prefixed {
-            true => OPCODE_TABLE_PREFIXED.get(byte as usize).and_then(|entry| entry.as_ref().map(|info| info)),
-            false => OPCODE_TABLE.get(byte as usize).and_then(|entry| entry.as_ref().map(|info| info)),
+            true => OPCODE_TABLE_PREFIXED[byte as usize].as_ref(),
+            false => OPCODE_TABLE[byte as usize].as_ref(),
         }
     }
 }
