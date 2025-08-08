@@ -33,7 +33,7 @@ impl Emulator {
         let (width, height) = (WIDTH, HEIGHT);
         let options = WindowOptions {
             resize: true,
-            scale: minifb::Scale::X1,
+            scale: minifb::Scale::X2,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
         };

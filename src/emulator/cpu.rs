@@ -62,12 +62,14 @@ impl CPU {
             opcode = self.read_next_byte();
         }
 
-        let instruction = Instruction::from_byte(opcode, prefixed).unwrap_or_else(|| {
+        let opcode_info = OpcodeInfo::from_byte(opcode, prefixed).ok_or_else(|| {
             panic!(
                 "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
                 self.reg.pc, opcode, prefixed
             );
-        });
+        })?;
+
+        let instruction = opcode_info.instruction;
 
         println!(
             "{} PCMEM:{:02X},{:02X},{:02X},{:02X}",
@@ -79,7 +81,7 @@ impl CPU {
         );
 
         self.reg.pc = control_unit::execute(self, instruction);
-        let cycles = instruction.cycles();
+        let cycles = opcode_info.cycles;
 
         // Step the timer and check for timer interrupt
         let timer_interrupt = self.bus.timer.step(
