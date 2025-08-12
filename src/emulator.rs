@@ -54,6 +54,7 @@ impl Emulator {
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        self.cpu.print_state();
         while self.window.is_open() {
             if self.window.is_key_down(Key::Escape) || !self.running {
                 return Ok(());

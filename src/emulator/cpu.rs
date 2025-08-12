@@ -9,9 +9,9 @@ use memory_bus::*;
 use registers::*;
 
 pub struct CPU {
-    reg: Registers,
+    pub reg: Registers,
     pub bus: MemoryBus,
-    halted: bool,
+    pub halted: bool,
     pub ime: bool,
     pub ei_delay: bool, // EI instruction has delayed effect
 }
@@ -35,33 +35,24 @@ impl CPU {
             self.ei_delay = false;
         }
 
-        if self.ime && !self.halted {
-            if let Some(cycles) = self.handle_interrupts() {
-                return Ok(cycles);
-            }
+        if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
+            return Ok(interrupt_cycles);
         }
 
         if self.halted {
-            // Check if any interrupt is pending to wake up from HALT
-            if self.bus.io.int_enable & self.bus.io.int_flag != 0 {
-                self.halted = false;
-                // If IME is disabled, there's a halt bug where PC doesn't increment
-                if !self.ime {
-                    // HALT bug: when waking from HALT with IME=0, the next instruction is executed twice
-                    // For now, we'll just continue normally but this should be properly implemented
-                    panic!("HALT bug: PC should not increment when IME=0");
-                }
-            } else {
-                return Ok(4);
-            }
+            // No interrupts but still in HALT, step timer and return
+            self.step_timer(4);
+            return Ok(4);
         }
 
+        // Fetch opcode
         let mut opcode = self.bus.read_byte(self.reg.pc);
         let prefixed = opcode == 0xCB;
         if prefixed {
             opcode = self.read_next_byte();
         }
 
+        // Decode opcode
         let opcode_info = OpcodeInfo::from_byte(opcode, prefixed).ok_or_else(|| {
             panic!(
                 "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
@@ -70,7 +61,28 @@ impl CPU {
         })?;
 
         let instruction = opcode_info.instruction;
+        let (next_pc, var_cycles) = control_unit::execute(self, instruction);
 
+        self.reg.pc = next_pc;
+
+        let cycles = match var_cycles {
+            Some(var_cycles_taken) => var_cycles_taken,
+            None => opcode_info.cycles,
+        };
+
+        self.step_timer(cycles);
+        self.print_state();
+
+        Ok(cycles)
+    }
+
+    fn step_timer(&mut self, cycles: u8) {
+        if self.bus.timer.step(cycles) {
+            self.request_interrupt(0b100); // Timer interrupt bit
+        }
+    }
+
+    pub fn print_state(&self) {
         println!(
             "{} PCMEM:{:02X},{:02X},{:02X},{:02X}",
             self.reg,
@@ -79,43 +91,39 @@ impl CPU {
             self.bus.read_byte(self.reg.pc.wrapping_add(2)),
             self.bus.read_byte(self.reg.pc.wrapping_add(3))
         );
-
-        self.reg.pc = control_unit::execute(self, instruction);
-        let cycles = opcode_info.cycles;
-
-        // Step the timer and check for timer interrupt
-        let timer_interrupt = self.bus.timer.step(
-            cycles,
-            &mut self.bus.io.div,
-            &mut self.bus.io.tima,
-            self.bus.io.tma,
-            self.bus.io.tac,
-        );
-
-        if timer_interrupt {
-            self.request_interrupt(0b100); // Timer interrupt bit
-        }
-
-        Ok(cycles)
     }
 
-    fn handle_interrupts(&mut self) -> Option<u8> {
-        let pending = self.bus.io.int_enable & self.bus.io.int_flag;
+    fn check_interrupts(&mut self, next_pc: u16) -> Option<u8> {
+        let int_f = self.bus.read_byte(0xFF0F);
+        let int_e = self.bus.read_byte(0xFFFF);
+
+        // If no interrupts are pending, return early
+        let pending = int_f & int_e;
         if pending == 0 {
             return None;
         }
 
-        self.halted = false; // Exit HALT state if an interrupt is being handled
-        self.ime = false; // Disable further interrupts
+        // If there are pending interrupts, always wake from HALT
+        if self.halted {
+            self.halted = false;
+        }
+
+        // Only process interrupts if IME is enabled
+        if !self.ime {
+            return None;
+        }
+
+        // Disable further interrupts
+        self.ime = false;
 
         for i in 0..5 {
             let mask = 1 << i;
             if pending & mask != 0 {
                 // Clear the interrupt flag
-                self.bus.io.int_flag &= !mask;
+                self.bus.write_byte(0xFF0F, int_f & !mask);
 
-                // Push the current PC onto the stack
-                self.alu_push(self.reg.pc);
+                // Push the next PC onto the stack (where execution should resume)
+                self.alu_push(next_pc);
 
                 // Jump to the interrupt vector
                 self.reg.pc = match i {
@@ -396,7 +404,8 @@ impl CPU {
     }
 
     pub fn request_interrupt(&mut self, interrupt: u8) {
-        self.bus.io.int_flag |= interrupt;
+        self.bus
+            .write_byte(0xFF0F, self.bus.read_byte(0xFF0F) | interrupt);
     }
 
     /// Sets the CPU halted state

@@ -1,10 +1,10 @@
 const REG_P1: u16 = 0xFF00;
 const REG_SB: u16 = 0xFF01;
 const REG_SC: u16 = 0xFF02;
-const REG_DIV: u16 = 0xFF04;
-const REG_TIMA: u16 = 0xFF05;
-const REG_TMA: u16 = 0xFF06;
-const REG_TAC: u16 = 0xFF07;
+// const REG_DIV: u16 = 0xFF04;
+// const REG_TIMA: u16 = 0xFF05;
+// const REG_TMA: u16 = 0xFF06;
+// const REG_TAC: u16 = 0xFF07;
 const REG_IF: u16 = 0xFF0F;
 const REG_NR10: u16 = 0xFF10;
 const REG_NR11: u16 = 0xFF11;
@@ -49,15 +49,17 @@ const REG_HDMA5: u16 = 0xFF55;
 const REG_SVBK: u16 = 0xFF70;
 const REG_IE: u16 = 0xFFFF;
 
+const PRINT_SERIAL: bool = false; // Set to true to print serial output
+
 pub struct IORegisters {
     p1: u8,
     sb: u8,
     sc: u8,
-    pub div: u8,      // Make timer registers public
-    pub tima: u8,
-    pub tma: u8,
-    pub tac: u8,
-    pub int_flag: u8,
+    // div: moved to Timer struct
+    // tima: u8,
+    // tma: u8,
+    // tac: u8,
+    int_flag: u8,
     nr10: u8,
     nr11: u8,
     nr12: u8,
@@ -99,7 +101,7 @@ pub struct IORegisters {
     hdma4: u8,
     hdma5: u8,
     svbk: u8,
-    pub int_enable: u8,
+    int_enable: u8,
 }
 
 impl IORegisters {
@@ -108,10 +110,10 @@ impl IORegisters {
             p1: 0xCF,
             sb: 0x00,
             sc: 0x00,
-            div: 0x0000,
-            tima: 0x00,
-            tma: 0x00,
-            tac: 0x00,
+            // div: 0xABCC,
+            // tima: 0x00,
+            // tma: 0x00,
+            // tac: 0x00,
             int_flag: 0x00,
             nr10: 0x80,
             nr11: 0xBF,
@@ -163,10 +165,10 @@ impl IORegisters {
             REG_P1 => (self.p1 & 0x30) | 0x0F,
             REG_SB => self.sb,
             REG_SC => self.sc,
-            REG_DIV => self.div as u8, // Return lower byte
-            REG_TIMA => self.tima,
-            REG_TMA => self.tma,
-            REG_TAC => self.tac,
+            // REG_DIV => 0x00,
+            // REG_TIMA => self.tima,
+            // REG_TMA => self.tma,
+            // REG_TAC => self.tac,
             REG_IF => self.int_flag,
             REG_NR10 => self.nr10,
             REG_NR11 => self.nr11,
@@ -218,11 +220,21 @@ impl IORegisters {
         match address {
             REG_P1 => self.p1 = 0xC0 | (self.p1 & 0x0F) | (value & 0x30),
             REG_SB => self.sb = value,
-            REG_SC => self.sc = value,
-            REG_DIV => self.div = 0, // Writing to DIV resets it
-            REG_TIMA => self.tima = value,
-            REG_TMA => self.tma = value,
-            REG_TAC => self.tac = value,
+            REG_SC => {
+                self.sc = value;
+                // Check if transfer is starting (bit 7 set and bit 0 set for internal clock)
+                if value & 0x81 == 0x81 {
+                    // Print the character from SB register and mark transfer as complete
+                    if PRINT_SERIAL {
+                        print!("{}", self.sb as char);
+                    }
+                    self.sc &= 0x7F; // Clear bit 7 to indicate transfer complete
+                }
+            },
+            // REG_DIV => (),
+            // REG_TIMA => self.tima = value,
+            // REG_TMA => self.tma = value,
+            // REG_TAC => self.tac = value & 0x07,
             REG_IF => self.int_flag = value & 0x1F, // Only lower 5 bits are writable
             REG_NR10 => self.nr10 = value,
             REG_NR11 => self.nr11 = value,

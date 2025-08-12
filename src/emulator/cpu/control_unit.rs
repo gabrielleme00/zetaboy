@@ -5,15 +5,22 @@ use ArithmeticSource16 as AS16;
 use ArithmeticSource8 as AS8;
 
 /// Executes a given `instruction`. Returns the next program counter value.
-pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
+pub fn execute(cpu: &mut CPU, instruction: Instruction) -> (u16, Option<u8>) {
     use Instruction::*;
-    match instruction {
+
+    let mut var_cycles = None; // If instruction has variable cycles, it writes to this
+
+    let next_pc = match instruction {
         ADC(source) => adc(cpu, source),
         ADD(source) => add(cpu, source),
         ADDHL(value) => add_hl(cpu, value),
         ADDSP => add_sp(cpu),
         AND(source) => and(cpu, source),
-        CALL(test) => call(cpu, test),
+        CALL(test) => {
+            let (next_pc, cycles) = call(cpu, test);
+            var_cycles = Some(cycles);
+            next_pc
+        },
         CP(value) => cp(cpu, value),
         CPL => cpl(cpu),
         DAA => daa(cpu),
@@ -22,16 +29,28 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         EI => set_ime(cpu, true),
         HALT => halt(cpu),
         INC(value) => inc(cpu, value),
-        JP(test) => jp(cpu, test),
+        JP(test) => {
+            let (next_pc, cycles) = jp(cpu, test);
+            var_cycles = Some(cycles);
+            next_pc
+        },
         JPHL => cpu.reg.get_hl(),
         JR => cpu.alu_jr(),
-        JRIF(condition) => jr_if(cpu, condition),
+        JRIF(condition) => {
+            let (next_pc, cycles) = jr_if(cpu, condition);
+            var_cycles = Some(cycles);
+            next_pc
+        },
         LD(load_type) => ld(cpu, load_type),
         NOP => cpu.reg.pc.wrapping_add(1),
         OR(value) => or(cpu, value),
         POP(target) => pop(cpu, target),
         PUSH(value) => push(cpu, value),
-        RET(test) => ret(cpu, test),
+        RET(test) => {
+            let (next_pc, cycles) = ret(cpu, test);
+            var_cycles = Some(cycles);
+            next_pc
+        },
         RETI => reti(cpu),
         RLA => rla(cpu),
         RLCA => rlca(cpu),
@@ -54,7 +73,9 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> u16 {
         SRL(target) => srl(cpu, target),
         SWAP(source) => swap(cpu, source),
         // _ => cpu.reg.pc, /* TODO: support more instructions */
-    }
+    };
+
+    (next_pc, var_cycles)
 }
 
 fn adc(cpu: &mut CPU, source: AS8) -> u16 {
@@ -177,13 +198,13 @@ fn add_sp(cpu: &mut CPU) -> u16 {
     cpu.reg.pc.wrapping_add(2)
 }
 
-fn call(cpu: &mut CPU, test: Option<FlagCondition>) -> u16 {
+fn call(cpu: &mut CPU, test: Option<FlagCondition>) -> (u16, u8) {
     let next_pc = cpu.reg.pc.wrapping_add(3);
     if cpu.test_jump_condition(test) {
         cpu.alu_push(next_pc);
-        cpu.read_next_word()
+        (cpu.read_next_word(), 24)
     } else {
-        next_pc
+        (next_pc, 12)
     }
 }
 
@@ -268,25 +289,28 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
 }
 
 /// Jumps to the address given by the next 2 bytes if the condition is met.
-fn jp(cpu: &CPU, test: Option<FlagCondition>) -> u16 {
+fn jp(cpu: &CPU, test: Option<FlagCondition>) -> (u16, u8) {
     if cpu.test_jump_condition(test) {
         // Game Boy is little endian so read pc + 1 as least significant byte
         // and pc + 2 as most significant byte
         let least_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 1) as u16;
         let most_significant_byte = cpu.bus.read_byte(cpu.reg.pc + 2) as u16;
-        (most_significant_byte << 8) | least_significant_byte
+        let result = (most_significant_byte << 8) | least_significant_byte;
+        (result, 16)
     } else {
         // Jump instructions are always 3 bytes wide
-        cpu.reg.pc.wrapping_add(3)
+        (cpu.reg.pc.wrapping_add(3), 12)
     }
 }
 
 /// Executes JR if a flag condition is met.
-fn jr_if(cpu: &mut CPU, condition: FlagCondition) -> u16 {
+///
+/// Returns the next program counter and the number of cycles taken.
+fn jr_if(cpu: &mut CPU, condition: FlagCondition) -> (u16, u8) {
     if cpu.test_flag_condition(condition) {
-        cpu.alu_jr()
+        (cpu.alu_jr(), 12)
     } else {
-        cpu.reg.pc.wrapping_add(2)
+        (cpu.reg.pc.wrapping_add(2), 8)
     }
 }
 
@@ -387,8 +411,8 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
                     cpu.bus.write_byte(cpu.reg.get_hl(), cpu.reg.a);
                 }
                 LI::A8 => {
-                    let offset = cpu.read_next_byte() as u16;
-                    let addr = 0xFF00 | offset;
+                    let a8 = cpu.read_next_byte() as u16;
+                    let addr = 0xFF00 | a8;
                     cpu.bus.write_byte(addr, cpu.reg.a);
                     length = 2;
                 }
@@ -408,8 +432,8 @@ fn ld(cpu: &mut CPU, load_type: LoadType) -> u16 {
             let mut length = 1;
             match source {
                 LI::A8 => {
-                    let offset = cpu.read_next_byte() as u16;
-                    let addr = 0xFF00 | offset;
+                    let a8 = cpu.read_next_byte() as u16;
+                    let addr = 0xFF00 | a8;
                     cpu.reg.a = cpu.bus.read_byte(addr);
                     length = 2;
                 }
@@ -511,11 +535,14 @@ fn push(cpu: &mut CPU, source: StackOperand) -> u16 {
     cpu.reg.pc.wrapping_add(1)
 }
 
-fn ret(cpu: &mut CPU, test: Option<FlagCondition>) -> u16 {
+fn ret(cpu: &mut CPU, test: Option<FlagCondition>) -> (u16, u8) {
     if cpu.test_jump_condition(test) {
-        cpu.alu_pop()
+        (cpu.alu_pop(), match test {
+            None => 16,
+            Some(_) => 20,
+        })
     } else {
-        cpu.reg.pc.wrapping_add(1)
+        (cpu.reg.pc.wrapping_add(1), 8)
     }
 }
 
