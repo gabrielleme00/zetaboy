@@ -8,7 +8,7 @@ Game Boy emulator in Rust
 | Test ROM                 | Status  |
 |--------------------------|---------|
 | 01-special.gb            | Passed  |
-| 02-interrupts.gb         | Pending |
+| 02-interrupts.gb         | Passed  |
 | 03-op sp,hl.gb           | Passed  |
 | 04-op r,imm.gb           | Pending |
 | 05-op rp.gb              | Pending |
