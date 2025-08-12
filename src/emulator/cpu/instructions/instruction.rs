@@ -29,9 +29,9 @@ pub enum Instruction {
     OR(ArithmeticSource8),
     CP(ArithmeticSource8),
     DAA,
-    // SCF,
+    SCF,
     CPL,
-    // CCF,
+    CCF,
 
     // ALU (16-bit)
     ADDHL(ArithmeticSource16),
@@ -53,7 +53,7 @@ pub enum Instruction {
     RRC(ArithmeticSource8),
     RL(ArithmeticSource8),
     RR(ArithmeticSource8),
-    // SET,
+    SET(u8, ArithmeticSource8),
     SLA(ArithmeticSource8),
     SRA(ArithmeticSource8),
     SRL(ArithmeticSource8),

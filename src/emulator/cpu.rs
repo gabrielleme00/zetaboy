@@ -413,6 +413,17 @@ impl CPU {
         self.halted = halted;
     }
 
+    /// Sets a specific bit in a value.
+    pub fn alu_set(&mut self, bit: u8, value: u8) -> u8 {
+        if bit < 8 {
+            let mask = 1 << bit;
+            value | mask
+        } else {
+            // Handle invalid bit as appropriate
+            value
+        }
+    }
+
     /// Shifts `value` left into Carry. LSB of `value` set to 0.
     ///
     /// Updates flags Z, N, H and C.

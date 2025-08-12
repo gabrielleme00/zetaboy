@@ -21,6 +21,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> (u16, Option<u8>) {
             var_cycles = Some(cycles);
             next_pc
         },
+        CCF => ccf(cpu),
         CP(value) => cp(cpu, value),
         CPL => cpl(cpu),
         DAA => daa(cpu),
@@ -58,6 +59,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> (u16, Option<u8>) {
         RRCA => rrca(cpu),
         RST(value) => rst(cpu, value),
         SBC(source) => sbc(cpu, source),
+        SCF => scf(cpu),
         STOP => stop(cpu),
         SUB(source) => sub(cpu, source),
         XOR(value) => xor(cpu, value),
@@ -68,6 +70,7 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) -> (u16, Option<u8>) {
         RRC(target) => rrc(cpu, target),
         RL(target) => rl(cpu, target),
         RR(target) => rr(cpu, target),
+        SET(bit, target) => set(cpu, bit, target),
         SLA(target) => sla(cpu, target),
         SRA(target) => sra(cpu, target),
         SRL(target) => srl(cpu, target),
@@ -133,6 +136,22 @@ fn sbc(cpu: &mut CPU, source: AS8) -> u16 {
         }
     });
     cpu.reg.pc.wrapping_add(length)
+}
+
+/// Set the carry flag CY.
+fn scf(cpu: &mut CPU) -> u16 {
+    cpu.reg.f.n = false;
+    cpu.reg.f.h = false;
+    cpu.reg.f.c = true;
+    cpu.reg.pc.wrapping_add(1)
+}
+
+// Flip the carry flag CY.
+fn ccf(cpu: &mut CPU) -> u16 {
+    cpu.reg.f.n = false;
+    cpu.reg.f.h = false;
+    cpu.reg.f.c = !cpu.reg.f.c;
+    cpu.reg.pc.wrapping_add(1)
 }
 
 /// Execution of a STOP instruction stops both the system clock and oscillator
@@ -268,6 +287,7 @@ fn dec(cpu: &mut CPU, value: IncDecSource) -> u16 {
 fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
     use IncDecSource as IDS;
     match value {
+        // 8-bit
         IDS::A => cpu.reg.a = cpu.alu_inc(cpu.reg.a),
         IDS::B => cpu.reg.b = cpu.alu_inc(cpu.reg.b),
         IDS::C => cpu.reg.c = cpu.alu_inc(cpu.reg.c),
@@ -277,9 +297,11 @@ fn inc(cpu: &mut CPU, value: IncDecSource) -> u16 {
         IDS::L => cpu.reg.l = cpu.alu_inc(cpu.reg.l),
         IDS::HLI => {
             let addr = cpu.reg.get_hl();
-            let new_value = cpu.alu_inc(cpu.bus.read_byte(addr));
+            let old_value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_inc(old_value);
             cpu.bus.write_byte(addr, new_value);
         }
+        // 16-bit (flags are not set)
         IDS::BC => cpu.reg.set_bc(cpu.reg.get_bc().wrapping_add(1)),
         IDS::DE => cpu.reg.set_de(cpu.reg.get_de().wrapping_add(1)),
         IDS::HL => cpu.reg.set_hl(cpu.reg.get_hl().wrapping_add(1)),
@@ -703,6 +725,30 @@ fn rr(cpu: &mut CPU, target: AS8) -> u16 {
         }
         AS8::D8 => {
             cpu.alu_rr(cpu.bus.read_byte(cpu.reg.pc + 2));
+            length = 3;
+        }
+    };
+    cpu.reg.pc.wrapping_add(length)
+}
+
+fn set(cpu: &mut CPU, bit: u8, target: AS8) -> u16 {
+    let mut length = 2;
+    match target {
+        AS8::A => cpu.reg.a = cpu.alu_set(bit, cpu.reg.a),
+        AS8::B => cpu.reg.b = cpu.alu_set(bit, cpu.reg.b),
+        AS8::C => cpu.reg.c = cpu.alu_set(bit, cpu.reg.c),
+        AS8::D => cpu.reg.d = cpu.alu_set(bit, cpu.reg.d),
+        AS8::E => cpu.reg.e = cpu.alu_set(bit, cpu.reg.e),
+        AS8::H => cpu.reg.h = cpu.alu_set(bit, cpu.reg.h),
+        AS8::L => cpu.reg.l = cpu.alu_set(bit, cpu.reg.l),
+        AS8::HLI => {
+            let addr = cpu.reg.get_hl();
+            let value = cpu.bus.read_byte(addr);
+            let new_value = cpu.alu_set(bit, value);
+            cpu.bus.write_byte(addr, new_value);
+        }
+        AS8::D8 => {
+            cpu.alu_set(bit, cpu.bus.read_byte(cpu.reg.pc + 2));
             length = 3;
         }
     };

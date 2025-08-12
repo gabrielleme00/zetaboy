@@ -43,7 +43,7 @@ pub static OPCODE_TABLE: [Option<OpcodeInfo>; 256] = [
     S(OI::new(I::INC(IDS::H), "X", 0, 4)),
     S(OI::new(I::DEC(IDS::H), "X", 0, 4)),
     S(OI::new(I::LD(LT::Byte(LBT::H, LBS::D8)), "X", 0, 8)),
-    S(OI::new(I::DAA, "X", 0, 4)),
+    S(OI::new(I::DAA, "DAA", 1, 4)),
     S(OI::new(I::JRIF(FC::Zero), "X", 0, 12)),
     S(OI::new(I::ADDHL(AS16::HL), "X", 0, 8)),
     S(OI::new(I::LD(LT::AFromIndirect(LI::HLinc)), "X", 0, 8)),
@@ -51,16 +51,16 @@ pub static OPCODE_TABLE: [Option<OpcodeInfo>; 256] = [
     S(OI::new(I::INC(IDS::L), "X", 0, 4)),
     S(OI::new(I::DEC(IDS::L), "X", 0, 4)),
     S(OI::new(I::LD(LT::Byte(LBT::L, LBS::D8)), "X", 0, 8)),
-    S(OI::new(I::CPL, "X", 0, 4)),
+    S(OI::new(I::CPL, "CPL", 1, 4)),
     // 0x30 - 0x3F
     S(OI::new(I::JRIF(FC::NotCarry), "X", 0, 12)),
     S(OI::new(I::LD(LT::Word(LWT::SP, LWS::D16)), "X", 0, 12)),
     S(OI::new(I::LD(LT::IndirectFromA(LI::HLdec)), "X", 0, 8)),
     S(OI::new(I::INC(IDS::SP), "X", 0, 8)),
-    S(OI::new(I::INC(IDS::HL), "X", 0, 12)),
+    S(OI::new(I::INC(IDS::HLI), "X", 0, 12)),
     S(OI::new(I::DEC(IDS::HLI), "X", 0, 12)),
     S(OI::new(I::LD(LT::Byte(LBT::HLI, LBS::D8)), "X", 0, 12)),
-    None, // TODO: 0x37 SCF
+    S(OI::new(I::SCF, "SCF", 1, 4)),
     S(OI::new(I::JRIF(FC::Carry), "X", 0, 12)),
     S(OI::new(I::ADDHL(AS16::SP), "X", 0, 8)),
     S(OI::new(I::LD(LT::AFromIndirect(LI::HLdec)), "X", 0, 8)),
@@ -68,7 +68,7 @@ pub static OPCODE_TABLE: [Option<OpcodeInfo>; 256] = [
     S(OI::new(I::INC(IDS::A), "X", 0, 4)),
     S(OI::new(I::DEC(IDS::A), "X", 0, 4)),
     S(OI::new(I::LD(LT::Byte(LBT::A, LBS::D8)), "X", 0, 8)),
-    None, // TODO: 0x3F CCF
+    S(OI::new(I::CCF, "CCF", 1, 4)),
     // 0x40 - 0x4F
     S(OI::new(I::LD(LT::Byte(LBT::B, LBS::B)), "X", 0, 4)),
     S(OI::new(I::LD(LT::Byte(LBT::B, LBS::C)), "X", 0, 4)),
