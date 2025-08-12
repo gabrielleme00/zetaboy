@@ -144,7 +144,7 @@ impl PPU {
             if self.dot_counter >= 252 {
                 // The scanline is rendered when we *enter* H-Blank
                 if previous_mode != PPUMode::HBlank {
-                    self.render_scanline(io_registers.lcdc, bgp_value);
+                    self.render_scanline(io_registers, bgp_value);
                 }
                 // 80 (Mode 2) + 172 (Mode 3)
                 PPUMode::HBlank
@@ -208,16 +208,20 @@ impl PPU {
         }
     }
 
-    fn render_scanline(&mut self, lcdc: u8, bgp_value: u8) {
+    fn render_scanline(&mut self, io_registers: &IORegisters, bgp_value: u8) {
+        let lcdc = io_registers.lcdc;
+
         // BG tile map selection
         let tile_map_addr = if (lcdc & 0x08) != 0 { 0x9C00 } else { 0x9800 };
 
-        // SCY/SCX registers (scroll Y/X), for now hardcoded to 0
-        let scy = 0u8;
-        let scx = 0u8;
+        // SCY/SCX registers (scroll Y/X)
+        let scy = io_registers.scy;
+        let scx = io_registers.scx;
 
+        // Calculate the effective line Y position
         let line_y = self.line.wrapping_add(scy);
 
+        // --- Render Background ---
         for x in 0..WIDTH {
             let pixel_x = x.wrapping_add(scx as usize);
 
@@ -253,6 +257,95 @@ impl PPU {
             };
 
             self.buffer[self.line as usize * WIDTH + x] = color;
+        }
+
+        // --- Render Sprites (OBJ) ---
+        if (lcdc & 0x02) != 0 {
+            self.render_sprites(lcdc);
+        }
+    }
+
+    /// Renders sprites for the current scanline, respecting priority, palette, and flipping.
+    fn render_sprites(&mut self, lcdc: u8) {
+        let sprite_height = if (lcdc & 0x04) != 0 { 16 } else { 8 };
+        let mut sprites_on_line = Vec::new();
+
+        // OAM: 4 bytes per sprite, 40 sprites max
+        for i in 0..40 {
+            let oam_base = i * 4;
+            let y = self.oam[oam_base] as i16 - 16;
+            let x = self.oam[oam_base + 1] as i16 - 8;
+            let tile = self.oam[oam_base + 2];
+            let attr = self.oam[oam_base + 3];
+
+            // Is this sprite visible on the current line?
+            if (self.line as i16) >= y && (self.line as i16) < y + sprite_height {
+                sprites_on_line.push((x, y, tile, attr));
+                if sprites_on_line.len() == 10 {
+                    break; // Hardware limit: max 10 sprites per line
+                }
+            }
+        }
+
+        // Lower X coordinate has priority (hardware behavior)
+        sprites_on_line.sort_by_key(|&(x, _, _, _)| x);
+
+        for &(x, y, tile, attr) in &sprites_on_line {
+            let palette = if (attr & 0x10) != 0 { self.obj_palette[1] } else { self.obj_palette[0] };
+            let x_flip = (attr & 0x20) != 0;
+            let y_flip = (attr & 0x40) != 0;
+            let priority = (attr & 0x80) != 0;
+
+            let line_in_sprite = if y_flip {
+                sprite_height - 1 - (self.line as i16 - y)
+            } else {
+                self.line as i16 - y
+            } as u8;
+
+            // For 8x16 sprites, lower bit of tile ignored (hardware behavior)
+            let tile_num = if sprite_height == 16 { tile & 0xFE } else { tile };
+            let tile_addr = self.get_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
+            let byte1 = self.read_vram(tile_addr);
+            let byte2 = self.read_vram(tile_addr + 1);
+
+            for px in 0..8 {
+                let bit = if x_flip { px } else { 7 - px };
+                let bit1 = (byte1 >> bit) & 1;
+                let bit2 = (byte2 >> bit) & 1;
+                let color_index = (bit2 << 1) | bit1;
+
+                // Color index 0 is transparent for OBJ
+                if color_index == 0 {
+                    continue;
+                }
+
+                let color_value = (palette >> (color_index * 2)) & 0x03;
+                let color = match color_value {
+                    0 => 0xFFFFFFFF, // White
+                    1 => 0xFFAAAAAA, // Light gray
+                    2 => 0xFF555555, // Dark gray
+                    3 => 0xFF000000, // Black
+                    _ => unreachable!(),
+                };
+
+                let screen_x = x + px as i16;
+                let screen_y = self.line as i16;
+                if screen_x < 0 || screen_x >= WIDTH as i16 || screen_y < 0 || screen_y >= HEIGHT as i16 {
+                    continue;
+                }
+
+                let idx = screen_y as usize * WIDTH + screen_x as usize;
+
+                // Priority: if OBJ has priority, only draw if BG color is 0
+                if priority {
+                    let bg_color = self.buffer[idx];
+                    if bg_color == 0xFFFFFFFF {
+                        self.buffer[idx] = color;
+                    }
+                } else {
+                    self.buffer[idx] = color;
+                }
+            }
         }
     }
 
