@@ -8,6 +8,8 @@ use instructions::*;
 use memory_bus::*;
 use registers::*;
 
+const PRINT_STATE: bool = false;
+
 pub struct CPU {
     pub reg: Registers,
     pub bus: MemoryBus,
@@ -83,6 +85,9 @@ impl CPU {
     }
 
     pub fn print_state(&self) {
+        if !PRINT_STATE {
+            return;
+        }
         println!(
             "{} PCMEM:{:02X},{:02X},{:02X},{:02X}",
             self.reg,

@@ -50,7 +50,7 @@ impl MemoryBus {
                 0xFF05 => self.timer.tima,
                 0xFF06 => self.timer.tma,
                 0xFF07 => self.timer.tac,
-                0xFF44 => 0x90, // TEMP: for logs only
+                // 0xFF44 => 0x90, // Only return 0x90 for logging purposes
                 0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address),
                 0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address),
                 _ => self.io.read(address),

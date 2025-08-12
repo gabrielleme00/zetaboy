@@ -18,3 +18,5 @@ Game Boy emulator in Rust
 | 09-op r,r.gb             | ✅ |
 | 10-bit ops.gb            | ✅ |
 | 11-op a,(hl).gb          | ✅ |
+
+![All Blarrg's tests passed](docs/blarggs_tests.png)
