@@ -1,3 +1,5 @@
+use crate::PRINT_SERIAL;
+
 const REG_P1: u16 = 0xFF00;
 const REG_SB: u16 = 0xFF01;
 const REG_SC: u16 = 0xFF02;
@@ -48,8 +50,6 @@ const REG_HDMA4: u16 = 0xFF54;
 const REG_HDMA5: u16 = 0xFF55;
 const REG_SVBK: u16 = 0xFF70;
 const REG_IE: u16 = 0xFFFF;
-
-const PRINT_SERIAL: bool = false; // Set to true to print serial output
 
 pub struct IORegisters {
     p1: u8,
@@ -230,7 +230,7 @@ impl IORegisters {
                     }
                     self.sc &= 0x7F; // Clear bit 7 to indicate transfer complete
                 }
-            },
+            }
             // REG_DIV => (),
             // REG_TIMA => self.tima = value,
             // REG_TMA => self.tma = value,
@@ -278,7 +278,7 @@ impl IORegisters {
             REG_HDMA5 => self.hdma5 = value,
             REG_SVBK => self.svbk = value,
             REG_IE => self.int_enable = value & 0x1F, // Only lower 5 bits are writable
-            _ => (), // Ignore writes to unused registers
+            _ => (),                                  // Ignore writes to unused registers
         };
     }
 }

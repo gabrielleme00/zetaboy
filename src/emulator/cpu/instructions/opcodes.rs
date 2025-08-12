@@ -27,7 +27,7 @@ pub static OPCODE_TABLE: [Option<OpcodeInfo>; 256] = [
     S(OI::new(I::DEC(IDS::D), "X", 0, 4)),
     S(OI::new(I::LD(LT::Byte(LBT::D, LBS::D8)), "X", 0, 8)),
     S(OI::new(I::RLA, "X", 0, 4)),
-    S(OI::new(I::JR, "X", 0, 3)),
+    S(OI::new(I::JR, "X", 0, 12)),
     S(OI::new(I::ADDHL(AS16::DE), "X", 0, 8)),
     S(OI::new(I::LD(LT::AFromIndirect(LI::DE)), "X", 0, 8)),
     S(OI::new(I::DEC(IDS::DE), "X", 0, 8)),

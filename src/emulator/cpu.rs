@@ -4,11 +4,10 @@ pub mod memory_bus;
 mod registers;
 
 use crate::emulator::cart::Cart;
+use crate::PRINT_STATE;
 use instructions::*;
 use memory_bus::*;
 use registers::*;
-
-const PRINT_STATE: bool = false;
 
 pub struct CPU {
     pub reg: Registers,
