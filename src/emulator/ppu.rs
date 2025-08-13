@@ -1,4 +1,4 @@
-use crate::emulator::cpu::memory_bus::io_registers::{IORegisters, REG_OBP0, REG_OBP1};
+use crate::emulator::cpu::memory_bus::io_registers::*;
 
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;
@@ -110,7 +110,7 @@ impl PPU {
 
         let previous_mode = self.mode;
         let previous_line = self.line;
-        let previous_ly_eq_lyc = io_registers.ly == io_registers.lyc;
+        let previous_ly_eq_lyc = io_registers.read(REG_LY) == io_registers.read(REG_LYC);
 
         // --- Core PPU Clock & State Machine Logic ---
         self.dot_counter += ppu_dots;
@@ -125,7 +125,7 @@ impl PPU {
         }
 
         // Update LY register here, right before we need it
-        io_registers.ly = self.line;
+        io_registers.write(REG_LY, self.line);
 
         // --- Mode Determination and Interrupt Request ---
 
@@ -163,26 +163,27 @@ impl PPU {
         self.check_stat_interrupts(io_registers, previous_mode);
 
         // Update STAT register with the new mode and LYC=LY flag
-        let ly_eq_lyc_flag = if io_registers.ly == io_registers.lyc {
+        let ly_eq_lyc_flag = if io_registers.read(REG_LY) == io_registers.read(REG_LYC) {
             0b00000100
         } else {
             0
         };
-        let stat_with_flags = (io_registers.stat & 0b11111000) | (new_mode as u8) | ly_eq_lyc_flag;
-        io_registers.stat = stat_with_flags;
+        let stat_with_flags =
+            (io_registers.read(REG_STAT) & 0b11111000) | (new_mode as u8) | ly_eq_lyc_flag;
+        io_registers.write(REG_STAT, stat_with_flags);
 
         // Check for LYC=LY interrupt (this is also an edge-triggered condition)
-        let new_ly_eq_lyc = io_registers.ly == io_registers.lyc;
+        let new_ly_eq_lyc = io_registers.read(REG_LY) == io_registers.read(REG_LYC);
         if !previous_ly_eq_lyc && new_ly_eq_lyc {
             // The condition just became true, check if interrupt is enabled
-            if (io_registers.stat & 0b01000000) != 0 {
+            if (io_registers.read(REG_STAT) & 0b01000000) != 0 {
                 self.int |= 0b10;
             }
         }
     }
 
     fn check_stat_interrupts(&mut self, io_registers: &mut IORegisters, previous_mode: PPUMode) {
-        let stat = io_registers.stat;
+        let stat = io_registers.read(REG_STAT);
         let current_mode = self.mode;
 
         // This is the core of the edge-triggered logic.
@@ -206,14 +207,14 @@ impl PPU {
     }
 
     fn render_scanline(&mut self, io_registers: &IORegisters, bgp_value: u8) {
-        let lcdc = io_registers.lcdc;
+        let lcdc = io_registers.read(REG_LCDC);
 
         // BG tile map selection
         let tile_map_addr = if (lcdc & 0x08) != 0 { 0x9C00 } else { 0x9800 };
 
         // SCY/SCX registers (scroll Y/X)
-        let scy = io_registers.scy;
-        let scx = io_registers.scx;
+        let scy = io_registers.read(REG_SCY);
+        let scx = io_registers.read(REG_SCX);
 
         // Calculate the effective line Y position
         let line_y = self.line.wrapping_add(scy);
@@ -294,11 +295,7 @@ impl PPU {
             let priority = (attr & 0x80) != 0;
 
             // Get OBJ palette
-            let obp_value = io_registers.read(if dmg_palette {
-                REG_OBP1
-            } else {
-                REG_OBP0
-            });
+            let obp_value = io_registers.read(if dmg_palette { REG_OBP1 } else { REG_OBP0 });
 
             // Sprite Y position is relative to the top of the screen
             let line_in_sprite = if y_flip {

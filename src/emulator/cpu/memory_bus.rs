@@ -54,7 +54,7 @@ impl MemoryBus {
                 _ => self.io.read(address),
             },
             0xFF80..=0xFFFE => self.hram[address_usize - 0xFF80],
-            0xFFFF => self.io.read(0x0FFFF),
+            0xFFFF => self.io.read(address),
             _ => 0,
         }
     }

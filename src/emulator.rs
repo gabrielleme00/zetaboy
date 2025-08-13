@@ -3,7 +3,7 @@ mod cpu;
 pub mod ppu;
 mod timer;
 
-use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
+use crate::emulator::cpu::memory_bus::io_registers::{JoypadButton, REG_LCDC};
 use crate::PRINT_CART_INFO;
 use cart::Cart;
 use cpu::CPU;
@@ -60,7 +60,7 @@ impl Emulator {
         let (width, height) = (WIDTH, HEIGHT);
         let options = WindowOptions {
             resize: true,
-            scale: minifb::Scale::X2,
+            scale: minifb::Scale::X4,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
         };
@@ -115,7 +115,7 @@ impl Emulator {
             // Clear all PPU interrupt flags
             self.cpu.bus.ppu.int = 0;
         }
-        let lcd_enabled = self.cpu.bus.io.lcdc & 0x80 != 0;
+        let lcd_enabled = self.cpu.bus.io.read(REG_LCDC) & 0x80 != 0;
         let vblank = self.cpu.bus.ppu.is_vblank();
 
         // Only update buffer on the rising edge of VBlank
