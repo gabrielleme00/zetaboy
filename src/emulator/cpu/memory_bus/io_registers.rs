@@ -37,8 +37,8 @@ const REG_LY: u16 = 0xFF44;
 const REG_LYC: u16 = 0xFF45;
 const REG_DMA: u16 = 0xFF46;
 const REG_BGP: u16 = 0xFF47;
-const REG_OBP0: u16 = 0xFF48;
-const REG_OBP1: u16 = 0xFF49;
+pub const REG_OBP0: u16 = 0xFF48;
+pub const REG_OBP1: u16 = 0xFF49;
 const REG_WY: u16 = 0xFF4A;
 const REG_WX: u16 = 0xFF4B;
 const REG_KEY1: u16 = 0xFF4D;
@@ -135,7 +135,7 @@ impl IORegisters {
             nr44: 0xBF,
             nr50: 0x77,
             nr51: 0xF3,
-            nr52: 0xF1, // Assuming DMG mode
+            nr52: 0b10001111,
             lcdc: 0x91,
             stat: 0x00,
             scy: 0x00,

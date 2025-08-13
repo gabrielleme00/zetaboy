@@ -5,16 +5,14 @@ Game Boy emulator in Rust
 
 Can be found at https://github.com/retrio/gb-test-roms/
 
-| Test ROM        |    |
-|-----------------|----|
-| cgb_sound       | ❌ |
-| cpu_instrs      | ✅ |
-| dmg_sound       | ❌ |
-| instr_timing    | ✅ |
-| interrupt_time  | ❌ |
-| mem_timing-2    | ❌ |
-| mem_timing      | ❌ |
-| oam_bug         | ❌ |
-| halt_bug.gb     | ❌ |
-| 10-bit ops.gb   | ❌ |
-| 11-op a,(hl).gb | ❌ |
+| Test ROM        |    | Note     |
+|-----------------|----| -------- |
+| cpu_instrs      | ✅ |          |
+| instr_timing    | ✅ |          |
+| dmg_sound       | ❌ |          |
+| mem_timing      | ❌ |          |
+| mem_timing-2    | ❌ |          |
+| oam_bug         | ❌ |          |
+| halt_bug.gb     | ❌ |          |
+| cgb_sound       | ❌ | GBC Only |
+| interrupt_time  | ❌ | GBC Only |

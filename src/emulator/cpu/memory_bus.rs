@@ -42,17 +42,15 @@ impl MemoryBus {
             0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
-            0xFE00..=0xFE9F => self.ppu.read_oam((address_usize - 0xFE00) as u16),
-            0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address),
-            0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address),
+            0xFE00..=0xFE9F => self.ppu.read_oam(address - 0xFE00),
             0xFF00..=0xFF7F => match address {
                 0xFF04 => self.timer.div,
                 0xFF05 => self.timer.tima,
                 0xFF06 => self.timer.tma,
                 0xFF07 => self.timer.tac,
                 // 0xFF44 => 0x90, // Only return 0x90 for logging purposes
-                0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address),
-                0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address),
+                // 0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address), // CGB
+                // 0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address), // CGB
                 _ => self.io.read(address),
             },
             0xFF80..=0xFFFE => self.hram[address_usize - 0xFF80],
@@ -105,8 +103,8 @@ impl MemoryBus {
                     self.io.write(address, value);
                     self.perform_dma_transfer(value);
                 }
-                0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address, value),
-                0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address, value),
+                // 0xFF68..=0xFF69 => self.ppu.write_bg_palette_ram(address, value),
+                // 0xFF6A..=0xFF6B => self.ppu.write_obj_palette_ram(address, value),
                 _ => self.io.write(address, value),
             },
             0xFF80..=0xFFFE => self.hram[address_usize - 0xFF80] = value,

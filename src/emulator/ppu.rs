@@ -1,4 +1,4 @@
-use crate::emulator::cpu::memory_bus::io_registers::IORegisters;
+use crate::emulator::cpu::memory_bus::io_registers::{IORegisters, REG_OBP0, REG_OBP1};
 
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;
@@ -18,8 +18,8 @@ pub struct PPU {
     pub buffer: Vec<u32>,
     vram: [u8; VRAM_SIZE],
     oam: [u8; OAM_SIZE],
-    bg_palette: [u8; 32],
-    obj_palette: [u8; 32],
+    // bg_palette: [u8; 32], // CGB
+    // obj_palette: [u8; 32], // CGB
     pub mode: PPUMode,
     line: u8, // LY
     dot_counter: u16,
@@ -32,8 +32,8 @@ impl PPU {
             buffer: vec![0; WIDTH * HEIGHT],
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
-            bg_palette: [0; 32],
-            obj_palette: [0; 32],
+            // bg_palette: [0; 32], // CGB
+            // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
             line: 0,
             dot_counter: 0,
@@ -81,32 +81,29 @@ impl PPU {
         }
     }
 
-    pub fn read_bg_palette_ram(&self, address: u16) -> u8 {
-        self.bg_palette[address as usize]
-    }
+    // pub fn read_bg_palette_ram(&self, address: u16) -> u8 {
+    //     self.bg_palette[address as usize]
+    // }
 
-    pub fn write_bg_palette_ram(&mut self, address: u16, value: u8) {
-        if address < self.bg_palette.len() as u16 {
-            self.bg_palette[address as usize] = value;
-        } else {
-            self.bg_palette[(address - 0xFF68) as usize] = value;
-        }
-    }
+    // pub fn write_bg_palette_ram(&mut self, address: u16, value: u8) {
+    //     if address < self.bg_palette.len() as u16 {
+    //         self.bg_palette[address as usize] = value;
+    //     } else {
+    //         self.bg_palette[(address - 0xFF68) as usize] = value;
+    //     }
+    // }
 
-    pub fn read_obj_palette_ram(&self, address: u16) -> u8 {
-        self.obj_palette[address as usize]
-    }
+    // pub fn read_obj_palette_ram(&self, address: u16) -> u8 {
+    //     self.obj_palette[address as usize]
+    // }
 
-    pub fn write_obj_palette_ram(&mut self, address: u16, value: u8) {
-        if address < self.obj_palette.len() as u16 {
-            self.obj_palette[address as usize] = value;
-        } else {
-            panic!(
-                "Warning: OBJ Palette RAM write out of bounds: {:#04X} = {:#02X}",
-                address, value
-            );
-        }
-    }
+    // pub fn write_obj_palette_ram(&mut self, address: u16, value: u8) {
+    //     if address < self.obj_palette.len() as u16 {
+    //         self.obj_palette[address as usize] = value;
+    //     } else {
+    //         self.obj_palette[(address - 0xFF48) as usize] = value;
+    //     }
+    // }
 
     pub fn step(&mut self, cpu_cycles: u8, bgp_value: u8, io_registers: &mut IORegisters) {
         let ppu_dots = (cpu_cycles as u16) * 4;
@@ -232,7 +229,7 @@ impl PPU {
             let tile_map_index = tile_map_y * 32 + tile_map_x;
             let tile_id = self.read_vram(tile_map_addr + tile_map_index as u16);
 
-            let tile_addr = self.get_tile_address(tile_id, lcdc);
+            let tile_addr = get_tile_address(tile_id, lcdc);
 
             let tile_x = pixel_x % 8;
             let tile_y = line_y as usize % 8;
@@ -261,12 +258,12 @@ impl PPU {
 
         // --- Render Sprites (OBJ) ---
         if (lcdc & 0x02) != 0 {
-            self.render_sprites(lcdc);
+            self.render_sprites(lcdc, io_registers);
         }
     }
 
     /// Renders sprites for the current scanline, respecting priority, palette, and flipping.
-    fn render_sprites(&mut self, lcdc: u8) {
+    fn render_sprites(&mut self, lcdc: u8, io_registers: &IORegisters) {
         let sprite_height = if (lcdc & 0x04) != 0 { 16 } else { 8 };
         let mut sprites_on_line = Vec::new();
 
@@ -291,11 +288,19 @@ impl PPU {
         sprites_on_line.sort_by_key(|&(x, _, _, _)| x);
 
         for &(x, y, tile, attr) in &sprites_on_line {
-            let palette = if (attr & 0x10) != 0 { self.obj_palette[1] } else { self.obj_palette[0] };
+            let dmg_palette = (attr & 0x10) != 0;
             let x_flip = (attr & 0x20) != 0;
             let y_flip = (attr & 0x40) != 0;
             let priority = (attr & 0x80) != 0;
 
+            // Get OBJ palette
+            let obp_value = io_registers.read(if dmg_palette {
+                REG_OBP1
+            } else {
+                REG_OBP0
+            });
+
+            // Sprite Y position is relative to the top of the screen
             let line_in_sprite = if y_flip {
                 sprite_height - 1 - (self.line as i16 - y)
             } else {
@@ -303,8 +308,12 @@ impl PPU {
             } as u8;
 
             // For 8x16 sprites, lower bit of tile ignored (hardware behavior)
-            let tile_num = if sprite_height == 16 { tile & 0xFE } else { tile };
-            let tile_addr = self.get_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
+            let tile_num = if sprite_height == 16 {
+                tile & 0xFE
+            } else {
+                tile
+            };
+            let tile_addr = get_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
             let byte1 = self.read_vram(tile_addr);
             let byte2 = self.read_vram(tile_addr + 1);
 
@@ -319,18 +328,10 @@ impl PPU {
                     continue;
                 }
 
-                let color_value = (palette >> (color_index * 2)) & 0x03;
-                let color = match color_value {
-                    0 => 0xFFFFFFFF, // White
-                    1 => 0xFFAAAAAA, // Light gray
-                    2 => 0xFF555555, // Dark gray
-                    3 => 0xFF000000, // Black
-                    _ => unreachable!(),
-                };
+                let color = get_color_from_palette(obp_value, color_index);
 
-                let screen_x = x + px as i16;
-                let screen_y = self.line as i16;
-                if screen_x < 0 || screen_x >= WIDTH as i16 || screen_y < 0 || screen_y >= HEIGHT as i16 {
+                let (screen_x, screen_y) = (x + px as i16, self.line as i16);
+                if is_pixel_out_of_bounds(screen_x, screen_y) {
                     continue;
                 }
 
@@ -348,18 +349,34 @@ impl PPU {
             }
         }
     }
+}
 
-    fn get_tile_address(&self, tile_id: u8, lcdc: u8) -> u16 {
-        if (lcdc >> 4) & 0b1 == 1 {
-            let base_addr: u16 = 0x8000;
-            // Unsigned addressing (0x8000-0x8FFF)
-            base_addr + (tile_id as u16 * 16)
-        } else {
-            let base_addr: u16 = 0x9000;
-            // Signed addressing (0x8800-0x97FF)
-            let signed_id = tile_id as i8;
-            let offset: i16 = signed_id as i16 * 16;
-            (base_addr as i16 + offset) as u16
-        }
+fn get_tile_address(tile_id: u8, lcdc: u8) -> u16 {
+    if (lcdc >> 4) & 0b1 == 1 {
+        let base_addr: u16 = 0x8000;
+        // Unsigned addressing (0x8000-0x8FFF)
+        base_addr + (tile_id as u16 * 16)
+    } else {
+        let base_addr: u16 = 0x9000;
+        // Signed addressing (0x8800-0x97FF)
+        let signed_id = tile_id as i8;
+        let offset: i16 = signed_id as i16 * 16;
+        (base_addr as i16 + offset) as u16
     }
+}
+
+/// Returns ARGB color from `palette` based on `color_index`.
+fn get_color_from_palette(palette: u8, color_index: u8) -> u32 {
+    let color_value = (palette >> (color_index * 2)) & 0x03;
+    match color_value {
+        0 => 0xFFFFFFFF, // White
+        1 => 0xFFAAAAAA, // Light gray
+        2 => 0xFF555555, // Dark gray
+        3 => 0xFF000000, // Black
+        _ => unreachable!(),
+    }
+}
+
+fn is_pixel_out_of_bounds(x: i16, y: i16) -> bool {
+    x < 0 || x >= WIDTH as i16 || y < 0 || y >= HEIGHT as i16
 }
