@@ -4,13 +4,12 @@ pub mod ppu;
 mod timer;
 
 use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
+use crate::PRINT_CART_INFO;
 use cart::Cart;
 use cpu::CPU;
 use minifb::{Key, Window, WindowOptions};
 use ppu::{HEIGHT, WIDTH};
 use std::error::Error;
-
-const PRINT_CART_INFO: bool = false;
 
 struct InputConfig {
     right: Key,
@@ -68,7 +67,6 @@ impl Emulator {
         let window: Window = Window::new(&name, width, height, options).unwrap_or_else(|e| {
             panic!("Error building window: {}", e);
         });
-        // window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
         Ok(Emulator {
             window,

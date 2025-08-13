@@ -1,7 +1,11 @@
 # zetaboy
-Game Boy emulator in Rust
+Game Boy emulator in Rust.
 
-## Blargg's Test ROMs
+![alt text](screenshot_tetris.png)
+
+## Accuracy Tests
+
+### Blargg's Test ROMs
 
 Can be found at https://github.com/retrio/gb-test-roms/
 
