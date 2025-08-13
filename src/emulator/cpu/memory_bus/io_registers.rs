@@ -1,5 +1,16 @@
 use crate::PRINT_SERIAL;
 
+pub enum JoypadButton {
+    Right,
+    Left,
+    Up,
+    Down,
+    A,
+    B,
+    Select,
+    Start,
+}
+
 const REG_P1: u16 = 0xFF00;
 const REG_SB: u16 = 0xFF01;
 const REG_SC: u16 = 0xFF02;
@@ -53,6 +64,7 @@ const REG_IE: u16 = 0xFFFF;
 
 pub struct IORegisters {
     p1: u8,
+    joypad_state: u8, // New field for raw joypad button states
     sb: u8,
     sc: u8,
     // div: moved to Timer struct
@@ -108,6 +120,7 @@ impl IORegisters {
     pub fn new() -> Self {
         Self {
             p1: 0xCF,
+            joypad_state: 0xFF, // All buttons unpressed
             sb: 0x00,
             sc: 0x00,
             // div: 0xABCC,
@@ -160,9 +173,47 @@ impl IORegisters {
         }
     }
 
+    pub fn set_button_state(&mut self, button: JoypadButton, pressed: bool) {
+        let bit_index = match button {
+            JoypadButton::Right => 0,
+            JoypadButton::Left => 1,
+            JoypadButton::Up => 2,
+            JoypadButton::Down => 3,
+            JoypadButton::A => 4,
+            JoypadButton::B => 5,
+            JoypadButton::Select => 6,
+            JoypadButton::Start => 7,
+        };
+
+        let current_state = (self.joypad_state >> bit_index) & 1;
+        let new_state = if pressed { 0 } else { 1 }; // 0 for pressed, 1 for unpressed
+
+        if current_state == 1 && new_state == 0 {
+            // Button transitioned from unpressed to pressed, request interrupt
+            self.int_flag |= 0x10; // Set Joypad interrupt bit (bit 4)
+        }
+
+        if pressed {
+            self.joypad_state &= !(1 << bit_index); // Set bit to 0 (pressed)
+        } else {
+            self.joypad_state |= 1 << bit_index; // Set bit to 1 (unpressed)
+        }
+    }
+
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            REG_P1 => (self.p1 & 0x30) | 0x0F,
+            REG_P1 => {
+                let mut result = self.p1;
+                // If P14 (Direction keys) is selected (0)
+                if result & 0x10 == 0 {
+                    result = (result & 0xF0) | (self.joypad_state & 0x0F); // Use bits 0-3 for directions
+                }
+                // If P15 (Action keys) is selected (0)
+                if result & 0x20 == 0 {
+                    result = (result & 0xF0) | ((self.joypad_state >> 4) & 0x0F); // Use bits 4-7 for actions
+                }
+                result
+            },
             REG_SB => self.sb,
             REG_SC => self.sc,
             // REG_DIV => 0x00,
@@ -218,7 +269,7 @@ impl IORegisters {
 
     pub fn write(&mut self, address: u16, value: u8) {
         match address {
-            REG_P1 => self.p1 = 0xC0 | (self.p1 & 0x0F) | (value & 0x30),
+            REG_P1 => self.p1 = (value & 0x30) | 0xCF,
             REG_SB => self.sb = value,
             REG_SC => {
                 self.sc = value;
