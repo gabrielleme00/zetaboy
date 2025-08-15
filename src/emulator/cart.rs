@@ -188,7 +188,7 @@ impl Header {
     fn title_to_string(&self) -> String {
         let title_from_utf8 = match std::str::from_utf8(&self.title) {
             Ok(v) => v,
-            Err(_) => return String::from("Invalid UTF-8"),
+            Err(_) => return String::from("Unknown Title"),
         };
         String::from(title_from_utf8).trim_matches('\0').to_string()
     }
