@@ -57,6 +57,7 @@ pub use addresses::*;
 
 const REG_MEM_SIZE: u16 = 0xFFFF - 0xFF00 + 1;
 
+#[derive(Debug)]
 pub enum JoypadButton {
     Right,
     Left,
@@ -68,47 +69,9 @@ pub enum JoypadButton {
     Start,
 }
 
-pub struct IORegisters {
-    joypad_state: u8,
-    mem: [u8; REG_MEM_SIZE as usize],
-}
-
-impl IORegisters {
-    pub fn new() -> Self {
-        let mut mem = [0; REG_MEM_SIZE as usize];
-
-        mem[(REG_P1 - 0xFF00) as usize] = 0xCF;
-        mem[(REG_NR10 - 0xFF00) as usize] = 0x80;
-        mem[(REG_NR11 - 0xFF00) as usize] = 0xBF;
-        mem[(REG_NR12 - 0xFF00) as usize] = 0xF3;
-        mem[(REG_NR14 - 0xFF00) as usize] = 0xBF;
-        mem[(REG_NR21 - 0xFF00) as usize] = 0x3F;
-        mem[(REG_NR24 - 0xFF00) as usize] = 0xBF;
-        mem[(REG_NR30 - 0xFF00) as usize] = 0x7F;
-        mem[(REG_NR31 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_NR32 - 0xFF00) as usize] = 0x9F;
-        mem[(REG_NR34 - 0xFF00) as usize] = 0xBF;
-        mem[(REG_NR41 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_NR44 - 0xFF00) as usize] = 0xBF;
-        mem[(REG_NR50 - 0xFF00) as usize] = 0x77;
-        mem[(REG_NR51 - 0xFF00) as usize] = 0xF3;
-        mem[(REG_NR52 - 0xFF00) as usize] = 0b10001111;
-        mem[(REG_LCDC - 0xFF00) as usize] = 0x91;
-        mem[(REG_BGP - 0xFF00) as usize] = 0xFC;
-        mem[(REG_OBP0 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_OBP1 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_HDMA1 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_HDMA2 - 0xFF00) as usize] = 0xFF;
-        mem[(REG_HDMA5 - 0xFF00) as usize] = 0xFF;
-
-        Self {
-            joypad_state: 0xFF, // All buttons unpressed
-            mem: [0; REG_MEM_SIZE as usize],
-        }
-    }
-
-    pub fn set_button_state(&mut self, button: JoypadButton, pressed: bool) {
-        let bit_index = match button {
+impl JoypadButton {
+    pub fn as_bit_index(&self) -> usize {
+        match self {
             JoypadButton::Right => 0,
             JoypadButton::Left => 1,
             JoypadButton::Up => 2,
@@ -117,7 +80,53 @@ impl IORegisters {
             JoypadButton::B => 5,
             JoypadButton::Select => 6,
             JoypadButton::Start => 7,
-        };
+        }
+    }
+}
+
+pub struct IORegisters {
+    joypad_state: u8,
+    mem: [u8; REG_MEM_SIZE as usize],
+}
+
+impl IORegisters {
+    pub fn new() -> Self {
+        use get_local_address as addr;
+
+        let mut mem = [0; REG_MEM_SIZE as usize];
+
+        mem[addr(REG_P1)] = 0xFF;
+        mem[addr(REG_NR10)] = 0x80;
+        mem[addr(REG_NR11)] = 0xBF;
+        mem[addr(REG_NR12)] = 0xF3;
+        mem[addr(REG_NR14)] = 0xBF;
+        mem[addr(REG_NR21)] = 0x3F;
+        mem[addr(REG_NR24)] = 0xBF;
+        mem[addr(REG_NR30)] = 0x7F;
+        mem[addr(REG_NR31)] = 0xFF;
+        mem[addr(REG_NR32)] = 0x9F;
+        mem[addr(REG_NR34)] = 0xBF;
+        mem[addr(REG_NR41)] = 0xFF;
+        mem[addr(REG_NR44)] = 0xBF;
+        mem[addr(REG_NR50)] = 0x77;
+        mem[addr(REG_NR51)] = 0xF3;
+        mem[addr(REG_NR52)] = 0b10001111;
+        mem[addr(REG_LCDC)] = 0x91;
+        mem[addr(REG_BGP)] = 0xFC;
+        mem[addr(REG_OBP0)] = 0xFF;
+        mem[addr(REG_OBP1)] = 0xFF;
+        mem[addr(REG_HDMA1)] = 0xFF;
+        mem[addr(REG_HDMA2)] = 0xFF;
+        mem[addr(REG_HDMA5)] = 0xFF;
+
+        Self {
+            joypad_state: 0xFF, // All buttons unpressed
+            mem,
+        }
+    }
+
+    pub fn set_button_state(&mut self, button: JoypadButton, pressed: bool) {
+        let bit_index = button.as_bit_index();
 
         let current_state = (self.joypad_state >> bit_index) & 1;
         let new_state = if pressed { 0 } else { 1 }; // 0 for pressed, 1 for unpressed
@@ -135,7 +144,7 @@ impl IORegisters {
     }
 
     pub fn read(&self, address: u16) -> u8 {
-        let local_addr = (address - 0xFF00) as usize;
+        let local_addr = get_local_address(address);
 
         match address {
             REG_P1 => {
@@ -155,7 +164,7 @@ impl IORegisters {
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
-        let local_addr = (address - 0xFF00) as usize;
+        let local_addr = get_local_address(address);
 
         match address {
             REG_P1 => self.mem[local_addr] = (value & 0x30) | 0xCF,
@@ -177,4 +186,8 @@ impl IORegisters {
             _ => self.mem[local_addr] = value,
         };
     }
+}
+
+fn get_local_address(address: u16) -> usize {
+    (address - 0xFF00) as usize
 }
