@@ -56,6 +56,14 @@ impl MemoryBus {
         }
     }
 
+    pub fn get_interrupt_flags(&self) -> u8 {
+        self.io.read(REG_IF)
+    }
+
+    pub fn get_interrupt_enable(&self) -> u8 {
+        self.io.read(REG_IE)
+    }
+
     /// Returns 2 bytes from the `address` (little-endian).
     pub fn read_word(&self, address: u16) -> u16 {
         let a = self.read_byte(address) as u16;
@@ -80,8 +88,8 @@ impl MemoryBus {
                 0xFF04..=0xFF07 => {
                     if self.timer.write(address, value) {
                         // Timer interrupt triggered
-                        let int_flag = self.io.read(0xFF0F);
-                        self.io.write(0xFF0F, int_flag | (InterruptBit::Timer as u8));
+                        let int_f = self.get_interrupt_flags();
+                        self.io.write(REG_IF, int_f | (InterruptBit::Timer as u8));
                     }
                 }
                 0xFF40 => {

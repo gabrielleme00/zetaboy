@@ -4,17 +4,27 @@ pub mod memory_bus;
 mod registers;
 
 use crate::emulator::cart::Cart;
+use crate::emulator::cpu::memory_bus::io_registers::REG_IF;
 use crate::PRINT_STATE;
 use instructions::*;
 use memory_bus::*;
 use registers::*;
 
+#[derive(PartialEq)]
+pub enum CpuMode {
+    Normal,
+    Halt,
+    Stop,
+    HaltBug,
+    HaltDI,
+    EnableIME,
+}
+
 pub struct CPU {
     pub reg: Registers,
     pub bus: MemoryBus,
-    pub halted: bool,
+    pub mode: CpuMode,
     pub ime: bool,
-    pub ei_delay: bool, // EI instruction has delayed effect
 }
 
 impl CPU {
@@ -22,28 +32,37 @@ impl CPU {
         Self {
             reg: Registers::new(),
             bus: MemoryBus::new(cart),
-            halted: false,
             ime: false,
-            ei_delay: false,
+            mode: CpuMode::Normal,
         }
     }
 
     /// Emulates a CPU step. Returns the number of cycles taken.
     pub fn step(&mut self) -> u8 {
+        use CpuMode::*;
+
         // Handle delayed EI: enable interrupts after the instruction following EI
-        if self.ei_delay {
-            self.ime = true;
-            self.ei_delay = false;
-        }
-
-        if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
-            return interrupt_cycles;
-        }
-
-        if self.halted {
-            // No interrupts but still in HALT, step timer and return
-            self.tick4();
-            return 4;
+        match self.mode {
+            Normal => {}
+            Halt | Stop => {
+                self.tick4();
+                if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
+                    return interrupt_cycles;
+                }
+                return 4;
+            }
+            HaltBug => {
+                self.tick4();
+                if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
+                    return interrupt_cycles;
+                }
+                return 4;
+            },
+            HaltDI => todo!("Implement Halt DI"),
+            EnableIME => {
+                self.ime = true;
+                self.mode = Normal;
+            }
         }
 
         // Fetch opcode
@@ -54,17 +73,27 @@ impl CPU {
         }
 
         // Decode opcode
-        let opcode_info = OpcodeInfo::from_byte(opcode, prefixed).ok_or_else(|| {
-            panic!(
-                "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
-                self.reg.pc, opcode, prefixed
-            );
-        }).unwrap();
+        let opcode_info = OpcodeInfo::from_byte(opcode, prefixed)
+            .ok_or_else(|| {
+                panic!(
+                    "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
+                    self.reg.pc, opcode, prefixed
+                );
+            })
+            .unwrap();
 
         let instruction = opcode_info.instruction;
         let (next_pc, var_cycles) = control_unit::execute(self, instruction);
 
         self.reg.pc = next_pc;
+
+        if self.ime {
+            if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
+                return interrupt_cycles;
+            }
+        }
+
+        self.print_state();
 
         let cycles = match var_cycles {
             Some(var_cycles_taken) => var_cycles_taken,
@@ -75,16 +104,12 @@ impl CPU {
             self.tick();
         }
 
-        self.print_state();
-
         cycles
     }
 
     fn tick(&mut self) {
         // Timer
-        if self.bus.timer.tick() {
-            self.request_interrupt(0b100); // Timer interrupt bit
-        }
+        self.bus.timer.tick(&mut self.bus.io);
         // PPU
         self.bus.ppu.tick(&mut self.bus.io);
     }
@@ -110,8 +135,10 @@ impl CPU {
     }
 
     fn check_interrupts(&mut self, next_pc: u16) -> Option<u8> {
-        let int_f = self.bus.read_byte(0xFF0F);
-        let int_e = self.bus.read_byte(0xFFFF);
+        use CpuMode::*;
+
+        let int_f = self.bus.get_interrupt_flags();
+        let int_e = self.bus.get_interrupt_enable();
 
         // If no interrupts are pending, return early
         let pending = int_f & int_e;
@@ -120,13 +147,8 @@ impl CPU {
         }
 
         // If there are pending interrupts, always wake from HALT
-        if self.halted {
-            self.halted = false;
-        }
-
-        // Only process interrupts if IME is enabled
-        if !self.ime {
-            return None;
+        if self.mode == Halt || self.mode == Stop {
+            self.mode = Normal;
         }
 
         // Disable further interrupts
@@ -136,7 +158,7 @@ impl CPU {
             let mask = 1 << i;
             if pending & mask != 0 {
                 // Clear the interrupt flag
-                self.bus.write_byte(0xFF0F, int_f & !mask);
+                self.bus.write_byte(REG_IF, int_f & !mask);
 
                 // Push the next PC onto the stack (where execution should resume)
                 self.alu_push(next_pc);
@@ -417,16 +439,6 @@ impl CPU {
         self.reg.f.h = false;
         self.reg.f.c = false;
         self.reg.a = new_value;
-    }
-
-    pub fn request_interrupt(&mut self, interrupt: u8) {
-        self.bus
-            .write_byte(0xFF0F, self.bus.read_byte(0xFF0F) | interrupt);
-    }
-
-    /// Sets the CPU halted state
-    pub fn set_halted(&mut self, halted: bool) {
-        self.halted = halted;
     }
 
     /// Sets a specific bit in a value.

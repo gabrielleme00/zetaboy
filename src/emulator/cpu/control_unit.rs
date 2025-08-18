@@ -1,5 +1,6 @@
 use super::instructions::*;
 use super::CPU;
+use super::CpuMode;
 
 use ArithmeticSource16 as AS16;
 use ArithmeticSource8 as AS8;
@@ -170,6 +171,7 @@ fn ccf(cpu: &mut CPU) -> u16 {
 /// - All interrupt-enable (IE) flags are reset.
 /// - Input to P10-P13 is LOW for all.
 fn stop(cpu: &mut CPU) -> u16 {
+    cpu.mode = CpuMode::Stop;
     cpu.reg.pc.wrapping_add(2)
 }
 
@@ -572,7 +574,7 @@ fn reti(cpu: &mut CPU) -> u16 {
     // RETI enables interrupts immediately (not delayed like EI)
     cpu.ime = true;
     // Clear any pending EI delay since we're enabling immediately
-    cpu.ei_delay = false;
+    cpu.mode = CpuMode::EnableIME;
     cpu.alu_pop()
 }
 
@@ -603,7 +605,7 @@ fn rrca(cpu: &mut CPU) -> u16 {
 fn set_ime(cpu: &mut CPU, value: bool) -> u16 {
     if value {
         // EI: Enable interrupts after the next instruction
-        cpu.ei_delay = true;
+        cpu.mode = CpuMode::EnableIME;
     } else {
         // DI: Disable interrupts immediately
         cpu.ime = false;
@@ -612,7 +614,17 @@ fn set_ime(cpu: &mut CPU, value: bool) -> u16 {
 }
 
 fn halt(cpu: &mut CPU) -> u16 {
-    cpu.set_halted(true);
+    if cpu.ime {
+        cpu.mode = CpuMode::Halt;
+    } else {
+        let int_f = cpu.bus.get_interrupt_flags();
+        let int_e = cpu.bus.get_interrupt_enable();
+        if int_f & int_e & 0x1F != 0 {
+            cpu.mode = CpuMode::HaltBug;
+        } else {
+            cpu.mode = CpuMode::HaltDI;
+        }
+    }
     cpu.reg.pc.wrapping_add(1)
 }
 

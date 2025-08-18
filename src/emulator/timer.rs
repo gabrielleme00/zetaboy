@@ -1,3 +1,5 @@
+use crate::emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit};
+
 /// Game Boy Timer implementation
 ///
 /// The Game Boy has several timer-related registers:
@@ -67,9 +69,7 @@ impl Timer {
     /// Steps the timer forward by the given number of T-cycles.
     ///
     /// Returns true if a timer interrupt should be triggered.
-    pub fn tick(&mut self) -> bool {
-        let mut interrupt = false;
-
+    pub fn tick(&mut self, io_registers: &mut IORegisters) {
         // Store old counter state
         let old_counter = self.div_counter;
 
@@ -103,7 +103,7 @@ impl Timer {
                     // TIMA should increment on falling edge
                     if self.tima == 0xFF {
                         self.tima = self.tma; // Reload from TMA
-                        interrupt = true; // Trigger interrupt
+                        io_registers.request_interrupt(InterruptBit::Timer);
                     } else {
                         self.tima = self.tima.wrapping_add(1);
                     }
@@ -112,8 +112,6 @@ impl Timer {
                 current = next;
             }
         }
-
-        interrupt
     }
 
     /// Resets the DIV register and internal cycle counter (called when DIV is written to)
