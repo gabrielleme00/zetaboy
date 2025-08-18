@@ -1,4 +1,4 @@
-use crate::PRINT_SERIAL;
+use crate::{utils::bits::*, PRINT_SERIAL};
 
 mod addresses {
     pub const REG_P1: u16 = 0xFF00;
@@ -58,11 +58,11 @@ pub use addresses::*;
 const REG_MEM_SIZE: u16 = 0xFFFF - 0xFF00 + 1;
 
 pub enum InterruptBit {
-    // VBlank = 0x01,
-    LCDStat = 0x02,
-    // Timer = 0x04,
-    // Serial = 0x08,
-    // Joypad = 0x10,
+    VBlank = BIT_0 as isize,
+    LCDStat = BIT_1 as isize,
+    Timer = BIT_2 as isize,
+    // Serial = BIT_3 as isize,
+    // Joypad = BIT_4 as isize,
 }
 
 #[derive(Debug)]
@@ -131,6 +131,10 @@ impl IORegisters {
             joypad_state: 0xFF, // All buttons unpressed
             mem,
         }
+    }
+
+    pub fn request_interrupt(&mut self, interrupt: InterruptBit) {
+        self.write(REG_IF, self.read(REG_IF) | interrupt as u8);
     }
 
     pub fn set_button_state(&mut self, button: JoypadButton, pressed: bool) {

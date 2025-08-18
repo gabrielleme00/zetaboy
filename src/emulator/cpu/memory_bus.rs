@@ -44,10 +44,7 @@ impl MemoryBus {
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFE00..=0xFE9F => self.ppu.read_oam(address - 0xFE00),
             0xFF00..=0xFF7F => match address {
-                0xFF04 => self.timer.div,
-                0xFF05 => self.timer.tima,
-                0xFF06 => self.timer.tma,
-                0xFF07 => self.timer.tac,
+                0xFF04..=0xFF07 => self.timer.read(address),
                 // 0xFF44 => 0x90, // Only return 0x90 for logging purposes
                 // 0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address), // CGB
                 // 0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address), // CGB
@@ -80,23 +77,12 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.ppu.write_oam((address_usize - 0xFE00) as u16, value),
             0xFEA0..=0xFEFF => {} // Unused OAM area
             0xFF00..=0xFF7F => match address {
-                0xFF04 => {
-                    if self.timer.reset_div() {
-                        // Timer interrupt triggered by DIV reset
-                        let current_if = self.io.read(0xFF0F);
-                        self.io.write(0xFF0F, current_if | 0x04);
+                0xFF04..=0xFF07 => {
+                    if self.timer.write(address, value) {
+                        // Timer interrupt triggered
+                        let int_flag = self.io.read(0xFF0F);
+                        self.io.write(0xFF0F, int_flag | (InterruptBit::Timer as u8));
                     }
-                }
-                0xFF05 => self.timer.tima = value,
-                0xFF06 => self.timer.tma = value,
-                0xFF07 => {
-                    let value = value & 0x07; // Only lower 3 bits are writable
-                    let current_tac = self.timer.tac;
-                    if (current_tac & 0x03) != (value & 0x03) {
-                        // If frequency changed, reset the timer
-                        self.timer.tima = self.timer.tma;
-                    }
-                    self.timer.tac = value;
                 }
                 0xFF40 => {
                     let lcdc = self.io.read(0xFF40);

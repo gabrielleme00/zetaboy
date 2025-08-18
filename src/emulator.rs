@@ -47,8 +47,6 @@ pub struct Emulator {
     window: Window,
     paused: bool,
     running: bool,
-    ticks: u64,
-    cycles: u64,
     cpu: CPU,
     prev_vblank: bool,
     input_config: InputConfig,
@@ -78,8 +76,6 @@ impl Emulator {
             window,
             paused: false,
             running: true,
-            ticks: 0,
-            cycles: 0,
             cpu: CPU::new(cart),
             prev_vblank: false,
             input_config: InputConfig::new(),
@@ -115,7 +111,7 @@ impl Emulator {
             let mut should_render = false;
             
             while executed_cycles < target_cycles {
-                let cpu_cycles = self.update()?;
+                let cpu_cycles = self.cpu.step();
                 executed_cycles += cpu_cycles as u64;
                 
                 // Check if we should render this frame
@@ -148,31 +144,6 @@ impl Emulator {
             }
         }
         Ok(())
-    }
-
-    fn update(&mut self) -> Result<u8, Box<dyn Error>> {
-        let cycles = self.cpu.step()?;
-
-        let bgp = self.cpu.bus.read_byte(0xFF47);
-        self.cpu.bus.ppu.step(cycles, bgp, &mut self.cpu.bus.io);
-
-        if self.cpu.bus.ppu.int != 0 {
-            // Handle VBlank interrupt (bit 0)
-            if self.cpu.bus.ppu.int & 0b1 != 0 {
-                self.cpu.request_interrupt(0b1);
-            }
-            // Handle LCD STAT interrupt (bit 1)
-            if self.cpu.bus.ppu.int & 0b10 != 0 {
-                self.cpu.request_interrupt(0b10);
-            }
-            // Clear all PPU interrupt flags
-            self.cpu.bus.ppu.int = 0;
-        }
-
-        self.cycles += cycles as u64;
-        self.ticks += 1;
-
-        Ok(cycles)
     }
 
     fn should_render(&mut self) -> bool {

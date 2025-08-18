@@ -1,4 +1,5 @@
 mod emulator;
+mod utils;
 
 use emulator::Emulator;
 use std::error::Error;

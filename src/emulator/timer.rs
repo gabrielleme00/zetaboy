@@ -25,17 +25,56 @@ impl Timer {
         }
     }
 
+    /// Read from timer registers.
+    pub fn read(&self, addr: u16) -> u8 {
+        match addr {
+            0xFF04 => self.div,
+            0xFF05 => self.tima,
+            0xFF06 => self.tma,
+            0xFF07 => self.tac | 0xF8,
+            _ => 0,
+        }
+    }
+
+    /// Write to timer registers.
+    ///
+    /// Returns true if timer interrupt was triggered.
+    pub fn write(&mut self, addr: u16, value: u8) -> bool {
+        let mut interrupt = false;
+        match addr {
+            0xFF04 => {
+                if self.reset_div() {
+                    // Timer interrupt triggered by DIV reset
+                    interrupt = true;
+                }
+            }
+            0xFF05 => self.tima = value,
+            0xFF06 => self.tma = value,
+            0xFF07 => {
+                let value = value & 0x07; // Only lower 3 bits are writable
+                let current_tac = self.tac;
+                if (current_tac & 0x03) != (value & 0x03) {
+                    // If frequency changed, reset the timer
+                    self.tima = self.tma;
+                }
+                self.tac = value;
+            }
+            _ => {}
+        }
+        interrupt
+    }
+
     /// Steps the timer forward by the given number of T-cycles.
     ///
     /// Returns true if a timer interrupt should be triggered.
-    pub fn step(&mut self, cycles: u8) -> bool {
+    pub fn tick(&mut self) -> bool {
         let mut interrupt = false;
 
         // Store old counter state
         let old_counter = self.div_counter;
 
         // Update counter
-        self.div_counter = self.div_counter.wrapping_add(cycles as u16);
+        self.div_counter = self.div_counter.wrapping_add(1);
 
         // Update DIV register (upper 8 bits of internal 16-bit counter)
         self.div = (self.div_counter >> 8) as u8;

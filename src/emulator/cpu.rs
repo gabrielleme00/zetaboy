@@ -29,7 +29,7 @@ impl CPU {
     }
 
     /// Emulates a CPU step. Returns the number of cycles taken.
-    pub fn step(&mut self) -> Result<u8, &'static str> {
+    pub fn step(&mut self) -> u8 {
         // Handle delayed EI: enable interrupts after the instruction following EI
         if self.ei_delay {
             self.ime = true;
@@ -37,13 +37,13 @@ impl CPU {
         }
 
         if let Some(interrupt_cycles) = self.check_interrupts(self.reg.pc) {
-            return Ok(interrupt_cycles);
+            return interrupt_cycles;
         }
 
         if self.halted {
             // No interrupts but still in HALT, step timer and return
-            self.step_timer(4);
-            return Ok(4);
+            self.tick4();
+            return 4;
         }
 
         // Fetch opcode
@@ -59,7 +59,7 @@ impl CPU {
                 "Unknown instruction at ${:04X}: {:#04X}, prefixed: {}",
                 self.reg.pc, opcode, prefixed
             );
-        })?;
+        }).unwrap();
 
         let instruction = opcode_info.instruction;
         let (next_pc, var_cycles) = control_unit::execute(self, instruction);
@@ -71,15 +71,27 @@ impl CPU {
             None => opcode_info.cycles,
         };
 
-        self.step_timer(cycles);
+        for _ in 0..cycles {
+            self.tick();
+        }
+
         self.print_state();
 
-        Ok(cycles)
+        cycles
     }
 
-    fn step_timer(&mut self, cycles: u8) {
-        if self.bus.timer.step(cycles) {
+    fn tick(&mut self) {
+        // Timer
+        if self.bus.timer.tick() {
             self.request_interrupt(0b100); // Timer interrupt bit
+        }
+        // PPU
+        self.bus.ppu.tick(&mut self.bus.io);
+    }
+
+    fn tick4(&mut self) {
+        for _ in 0..4 {
+            self.tick();
         }
     }
 

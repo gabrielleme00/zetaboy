@@ -1,4 +1,4 @@
-use crate::emulator::cpu::memory_bus::io_registers::*;
+use crate::{emulator::cpu::memory_bus::io_registers::*, utils::bits::*};
 
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;
@@ -22,7 +22,6 @@ pub struct PPU {
     // obj_palette: [u8; 32], // CGB
     pub mode: PPUMode,
     dot_counter: u16,
-    pub int: u8,
 }
 
 impl PPU {
@@ -35,7 +34,6 @@ impl PPU {
             // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
             dot_counter: 0,
-            int: 0,
         }
     }
 
@@ -98,8 +96,8 @@ impl PPU {
     //     }
     // }
 
-    pub fn step(&mut self, cpu_cycles: u8, bgp_value: u8, io_registers: &mut IORegisters) {
-        let ppu_dots = (cpu_cycles as u16) * 4;
+    pub fn tick(&mut self, io_registers: &mut IORegisters) {
+        let ppu_dots = 4;
 
         let mut ly = io_registers.read(REG_LY);
 
@@ -127,7 +125,7 @@ impl PPU {
         let new_mode = if ly >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
             if previous_line == 143 {
-                self.int |= 0b1;
+                io_registers.request_interrupt(InterruptBit::VBlank);
             }
             PPUMode::VBlank
         } else {
@@ -135,7 +133,8 @@ impl PPU {
             if self.dot_counter >= 252 {
                 // The scanline is rendered when we *enter* H-Blank
                 if previous_mode != PPUMode::HBlank {
-                    self.render_scanline(io_registers, bgp_value);
+                    let bgp = io_registers.read(0xFF47);
+                    self.render_scanline(io_registers, bgp);
                 }
                 // 80 (Mode 2) + 172 (Mode 3)
                 PPUMode::HBlank
@@ -171,27 +170,21 @@ impl PPU {
         if !previous_ly_eq_lyc && new_ly_eq_lyc {
             // The condition just became true, check if interrupt is enabled
             if (io_registers.read(REG_STAT) & 0b01000000) != 0 {
-                self.int |= InterruptBit::LCDStat as u8;
+                io_registers.request_interrupt(InterruptBit::LCDStat);
             }
         }
     }
 
     fn check_stat_interrupts(&mut self, io_registers: &mut IORegisters, previous_mode: PPUMode) {
         let stat = io_registers.read(REG_STAT);
-        let current_mode = self.mode;
 
-        if current_mode != previous_mode {
-            // H-Blank Interrupt
-            if current_mode == PPUMode::HBlank && (stat & 0b00001000) != 0 {
-                self.int |= InterruptBit::LCDStat as u8;
-            }
-            // V-Blank Interrupt
-            else if current_mode == PPUMode::VBlank && (stat & 0b00010000) != 0 {
-                self.int |= InterruptBit::LCDStat as u8;
-            }
-            // OAM Search Interrupt
-            else if current_mode == PPUMode::OAMSearch && (stat & 0b00100000) != 0 {
-                self.int |= InterruptBit::LCDStat as u8;
+        if self.mode != previous_mode {
+            if (self.mode == PPUMode::HBlank && (stat & BIT_3) != 0)
+                || (self.mode == PPUMode::VBlank && (stat & BIT_4) != 0)
+                || (self.mode == PPUMode::OAMSearch && (stat & BIT_5) != 0)
+                || (stat & BIT_6) & (stat & BIT_2) != 0
+            {
+                io_registers.request_interrupt(InterruptBit::LCDStat);
             }
         }
     }
