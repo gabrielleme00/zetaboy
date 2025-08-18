@@ -86,7 +86,7 @@ impl MemoryBus {
                         let current_if = self.io.read(0xFF0F);
                         self.io.write(0xFF0F, current_if | 0x04);
                     }
-                },
+                }
                 0xFF05 => self.timer.tima = value,
                 0xFF06 => self.timer.tma = value,
                 0xFF07 => {
@@ -97,7 +97,22 @@ impl MemoryBus {
                         self.timer.tima = self.timer.tma;
                     }
                     self.timer.tac = value;
-                },
+                }
+                0xFF40 => {
+                    let lcdc = self.io.read(0xFF40);
+                    if lcdc & 0x80 != 0 && value & 0x80 == 0 {
+                        // Disabling bit 7 (LCD & PPY enable) can only happen
+                        // during V-Blank
+                        if self.ppu.is_vblank() {
+                            self.ppu.mode = PPUMode::HBlank;
+                        } else {
+                            // Write to the LCDC register without changing the mode
+                            self.io.write(0xFF40, value & 0x7F);
+                        }
+                    } else {
+                        self.io.write(0xFF40, value);
+                    }
+                }
                 0xFF46 => {
                     // DMA register - perform OAM DMA transfer
                     self.io.write(address, value);

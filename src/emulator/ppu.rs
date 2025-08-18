@@ -21,30 +21,22 @@ pub struct PPU {
     // bg_palette: [u8; 32], // CGB
     // obj_palette: [u8; 32], // CGB
     pub mode: PPUMode,
-    line: u8, // LY
     dot_counter: u16,
     pub int: u8,
 }
 
 impl PPU {
     pub fn new() -> Self {
-        let mut new_ppu = PPU {
+        Self {
             buffer: vec![0; WIDTH * HEIGHT],
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
             // bg_palette: [0; 32], // CGB
             // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
-            line: 0,
             dot_counter: 0,
             int: 0,
-        };
-        // Fill the first tile with a simple pattern for testing
-        for i in 0..8 {
-            new_ppu.vram[i] = 0xAA; // Alternating bits
-            new_ppu.vram[i + 8] = 0x55; // Alternating bits
         }
-        new_ppu
     }
 
     pub fn is_vblank(&self) -> bool {
@@ -67,17 +59,18 @@ impl PPU {
     }
 
     pub fn read_oam(&self, address: u16) -> u8 {
-        self.oam[address as usize]
+        if address < self.oam.len() as u16 {
+            self.oam[address as usize]
+        } else {
+            self.oam[(address - 0xFE00) as usize]
+        }
     }
 
     pub fn write_oam(&mut self, address: u16, value: u8) {
         if address < self.oam.len() as u16 {
             self.oam[address as usize] = value;
         } else {
-            panic!(
-                "Warning: OAM write out of bounds: {:#04X} = {:#02X}",
-                address, value
-            );
+            self.oam[(address - 0xFE00) as usize] = value;
         }
     }
 
@@ -108,9 +101,11 @@ impl PPU {
     pub fn step(&mut self, cpu_cycles: u8, bgp_value: u8, io_registers: &mut IORegisters) {
         let ppu_dots = (cpu_cycles as u16) * 4;
 
+        let mut ly = io_registers.read(REG_LY);
+
         let previous_mode = self.mode;
-        let previous_line = self.line;
-        let previous_ly_eq_lyc = io_registers.read(REG_LY) == io_registers.read(REG_LYC);
+        let previous_line = ly;
+        let previous_ly_eq_lyc = ly == io_registers.read(REG_LYC);
 
         // --- Core PPU Clock & State Machine Logic ---
         self.dot_counter += ppu_dots;
@@ -118,19 +113,18 @@ impl PPU {
         // Handle end-of-line
         if self.dot_counter >= 456 {
             self.dot_counter -= 456;
-            self.line += 1;
-            if self.line >= 154 {
-                self.line = 0;
+            ly += 1;
+            if ly >= 154 {
+                ly = 0;
             }
         }
 
-        // Update LY register here, right before we need it
-        io_registers.write(REG_LY, self.line);
+        io_registers.write(REG_LY, ly);
 
         // --- Mode Determination and Interrupt Request ---
 
         // Determine the new mode based on the current line and dot counter
-        let new_mode = if self.line >= 144 {
+        let new_mode = if ly >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
             if previous_line == 143 {
                 self.int |= 0b1;
@@ -177,7 +171,7 @@ impl PPU {
         if !previous_ly_eq_lyc && new_ly_eq_lyc {
             // The condition just became true, check if interrupt is enabled
             if (io_registers.read(REG_STAT) & 0b01000000) != 0 {
-                self.int |= 0b10;
+                self.int |= InterruptBit::LCDStat as u8;
             }
         }
     }
@@ -186,27 +180,24 @@ impl PPU {
         let stat = io_registers.read(REG_STAT);
         let current_mode = self.mode;
 
-        // This is the core of the edge-triggered logic.
-        // We only request an interrupt when we've just entered a mode
-        // and that mode's interrupt is enabled.
-
         if current_mode != previous_mode {
             // H-Blank Interrupt
             if current_mode == PPUMode::HBlank && (stat & 0b00001000) != 0 {
-                self.int |= 0b10;
+                self.int |= InterruptBit::LCDStat as u8;
             }
             // V-Blank Interrupt
             else if current_mode == PPUMode::VBlank && (stat & 0b00010000) != 0 {
-                self.int |= 0b10;
+                self.int |= InterruptBit::LCDStat as u8;
             }
             // OAM Search Interrupt
             else if current_mode == PPUMode::OAMSearch && (stat & 0b00100000) != 0 {
-                self.int |= 0b10;
+                self.int |= InterruptBit::LCDStat as u8;
             }
         }
     }
 
     fn render_scanline(&mut self, io_registers: &IORegisters, bgp_value: u8) {
+        let ly = io_registers.read(REG_LY);
         let lcdc = io_registers.read(REG_LCDC);
 
         // BG tile map selection
@@ -217,7 +208,7 @@ impl PPU {
         let scx = io_registers.read(REG_SCX);
 
         // Calculate the effective line Y position
-        let line_y = self.line.wrapping_add(scy);
+        let line_y = ly.wrapping_add(scy);
 
         // --- Render Background ---
         for x in 0..WIDTH {
@@ -254,7 +245,7 @@ impl PPU {
                 _ => unreachable!(),
             };
 
-            self.buffer[self.line as usize * WIDTH + x] = color;
+            self.buffer[ly as usize * WIDTH + x] = color;
         }
 
         // --- Render Sprites (OBJ) ---
@@ -265,6 +256,7 @@ impl PPU {
 
     /// Renders sprites for the current scanline, respecting priority, palette, and flipping.
     fn render_sprites(&mut self, lcdc: u8, io_registers: &IORegisters) {
+        let ly = io_registers.read(REG_LY);
         let sprite_height = if (lcdc & 0x04) != 0 { 16 } else { 8 };
         let mut sprites_on_line = Vec::new();
 
@@ -277,7 +269,7 @@ impl PPU {
             let attr = self.oam[oam_base + 3];
 
             // Is this sprite visible on the current line?
-            if (self.line as i16) >= y && (self.line as i16) < y + sprite_height {
+            if (ly as i16) >= y && (ly as i16) < y + sprite_height {
                 sprites_on_line.push((x, y, tile, attr));
                 if sprites_on_line.len() == 10 {
                     break; // Hardware limit: max 10 sprites per line
@@ -299,9 +291,9 @@ impl PPU {
 
             // Sprite Y position is relative to the top of the screen
             let line_in_sprite = if y_flip {
-                sprite_height - 1 - (self.line as i16 - y)
+                sprite_height - 1 - (ly as i16 - y)
             } else {
-                self.line as i16 - y
+                ly as i16 - y
             } as u8;
 
             // For 8x16 sprites, lower bit of tile ignored (hardware behavior)
@@ -327,7 +319,7 @@ impl PPU {
 
                 let color = get_color_from_palette(obp_value, color_index);
 
-                let (screen_x, screen_y) = (x + px as i16, self.line as i16);
+                let (screen_x, screen_y) = (x + px as i16, ly as i16);
                 if is_pixel_out_of_bounds(screen_x, screen_y) {
                     continue;
                 }
@@ -348,6 +340,9 @@ impl PPU {
     }
 }
 
+/// Returns the tile address in VRAM for a given tile ID and LCDC register.
+///
+/// LCDC bit 4: BG & Window tile data area.
 fn get_tile_address(tile_id: u8, lcdc: u8) -> u16 {
     if (lcdc >> 4) & 0b1 == 1 {
         let base_addr: u16 = 0x8000;
@@ -374,6 +369,7 @@ fn get_color_from_palette(palette: u8, color_index: u8) -> u32 {
     }
 }
 
+/// Checks if a pixel is out of the screen bounds.
 fn is_pixel_out_of_bounds(x: i16, y: i16) -> bool {
     x < 0 || x >= WIDTH as i16 || y < 0 || y >= HEIGHT as i16
 }
