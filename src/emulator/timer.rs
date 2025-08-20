@@ -3,7 +3,6 @@ use crate::{emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit}
 const BITS: [u8; 4] = [9, 3, 5, 7];
 
 pub struct Timer {
-    /// Internal 16-bit divider counter (only upper 8 bits visible as DIV register)
     pub div: u16, // 0xFF04
     pub tima: u8, // 0xFF05
     pub tma: u8,  // 0xFF06
