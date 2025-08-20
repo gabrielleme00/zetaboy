@@ -64,13 +64,6 @@ impl MemoryBus {
         self.io.read(REG_IE)
     }
 
-    /// Returns 2 bytes from the `address` (little-endian).
-    pub fn read_word(&self, address: u16) -> u16 {
-        let a = self.read_byte(address) as u16;
-        let b = self.read_byte(address + 1) as u16;
-        (b << 8) | a
-    }
-
     /// Writes a byte of `value` to the `address`.
     pub fn write_byte(&mut self, address: u16, value: u8) {
         let address_usize = address as usize;
@@ -85,13 +78,7 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.ppu.write_oam((address_usize - 0xFE00) as u16, value),
             0xFEA0..=0xFEFF => {} // Unused OAM area
             0xFF00..=0xFF7F => match address {
-                0xFF04..=0xFF07 => {
-                    if self.timer.write(address, value) {
-                        // Timer interrupt triggered
-                        let int_f = self.get_interrupt_flags();
-                        self.io.write(REG_IF, int_f | (InterruptBit::Timer as u8));
-                    }
-                }
+                0xFF04..=0xFF07 => self.timer.write(address, value, &mut self.io),
                 0xFF40 => {
                     let lcdc = self.io.read(0xFF40);
                     if lcdc & 0x80 != 0 && value & 0x80 == 0 {
@@ -119,11 +106,6 @@ impl MemoryBus {
             0xFF80..=0xFFFE => self.hram[address_usize - 0xFF80] = value,
             0xFFFF => self.io.write(address, value),
         };
-    }
-
-    pub fn write_word(&mut self, address: u16, value: u16) {
-        self.write_byte(address, (value & 0xFF) as u8);
-        self.write_byte(address + 1, (value >> 8) as u8);
     }
 
     /// Performs DMA transfer to OAM

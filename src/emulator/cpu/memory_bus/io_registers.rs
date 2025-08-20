@@ -186,7 +186,7 @@ impl IORegisters {
                 if value & 0x81 == 0x81 {
                     // Print the character from SB register and mark transfer as complete
                     if PRINT_SERIAL {
-                        print!("{}", self.mem[REG_SB as usize] as char);
+                        print!("{}", self.mem[get_local_address(REG_SB) as usize] as char);
                     }
                     self.mem[local_addr] &= 0x7F; // Clear bit 7 to indicate transfer complete
                 }

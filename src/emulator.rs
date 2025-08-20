@@ -80,6 +80,7 @@ impl Emulator {
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        self.cpu.print_state();
         while self.running && self.window.is_open() {
             let frame_start = Instant::now();
 
@@ -97,7 +98,7 @@ impl Emulator {
             // Run CPU until VBlank (rising edge)
             let mut rendered = false;
             while !rendered {
-                self.cpu.step(); // Each step advances timers/PPU internally
+                self.cpu.step();
 
                 // Check for VBlank rising edge
                 let lcd_enabled = self.cpu.bus.io.read(REG_LCDC) & 0x80 != 0;
