@@ -36,7 +36,7 @@ mod addresses {
     pub const REG_SCX: u16 = 0xFF43;
     pub const REG_LY: u16 = 0xFF44;
     pub const REG_LYC: u16 = 0xFF45;
-    // pub const REG_DMA: u16 = 0xFF46;
+    pub const REG_DMA: u16 = 0xFF46;
     pub const REG_BGP: u16 = 0xFF47;
     pub const REG_OBP0: u16 = 0xFF48;
     pub const REG_OBP1: u16 = 0xFF49;
@@ -62,7 +62,7 @@ pub enum InterruptBit {
     LCDStat = BIT_1 as isize,
     Timer = BIT_2 as isize,
     // Serial = BIT_3 as isize,
-    // Joypad = BIT_4 as isize,
+    Joypad = BIT_4 as isize,
 }
 
 #[derive(Debug)]
@@ -120,11 +120,13 @@ impl IORegisters {
         mem[addr(REG_NR51)] = 0xF3;
         mem[addr(REG_NR52)] = 0b10001111;
         mem[addr(REG_LCDC)] = 0x91;
+        mem[addr(REG_DMA)] = 0xFF;
         mem[addr(REG_BGP)] = 0xFC;
         mem[addr(REG_OBP0)] = 0xFF;
         mem[addr(REG_OBP1)] = 0xFF;
         mem[addr(REG_HDMA1)] = 0xFF;
         mem[addr(REG_HDMA2)] = 0xFF;
+        mem[addr(REG_HDMA5)] = 0xFF;
         mem[addr(REG_HDMA5)] = 0xFF;
 
         Self {
@@ -145,7 +147,7 @@ impl IORegisters {
 
         if current_state == 1 && new_state == 0 {
             // Button transitioned from unpressed to pressed, request interrupt
-            self.write(REG_IF, 0x10); // Set Joypad interrupt bit (bit 4)
+            self.request_interrupt(InterruptBit::Joypad);
         }
 
         if pressed {
@@ -195,8 +197,14 @@ impl IORegisters {
             REG_NR52 => self.mem[local_addr] = value & 0x80 | (self.mem[local_addr] & 0x7F), // Only bit 7 is writable
             REG_STAT => self.mem[local_addr] = (self.mem[local_addr] & 0x83) | (value & 0x7C), // Bits 0-2 are read-only
             REG_IE => self.mem[local_addr] = value & 0x1F, // Only lower 5 bits are writable
+            REG_LY => {} // LY is read only
             _ => self.mem[local_addr] = value,
         };
+    }
+
+    pub fn force_write(&mut self, address: u16, value: u8) {
+        let local_addr = get_local_address(address);
+        self.mem[local_addr] = value;
     }
 }
 

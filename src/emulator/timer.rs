@@ -1,6 +1,12 @@
-use crate::{emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit}, utils::bits::*};
+use crate::{
+    emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit},
+    utils::bits::*,
+};
 
 const BITS: [u8; 4] = [9, 3, 5, 7];
+const OVERFLOW_INTERRUPT_TICK: u8 = 4;
+const OVERFLOW_RELOAD_TICK: u8 = 5;
+const OVERFLOW_RESET_TICK: u8 = 6;
 
 pub struct Timer {
     pub div: u16, // 0xFF04
@@ -11,7 +17,7 @@ pub struct Timer {
     current_bit: u16,
     last_bit: bool,
     overflow: bool,
-    ticks_since_overflow:  u8,
+    ticks_since_overflow: u8,
 }
 
 impl Timer {
@@ -45,7 +51,7 @@ impl Timer {
         match addr {
             0xFF04 => self.div = 0,
             0xFF05 => {
-                if self.ticks_since_overflow != 5 {
+                if self.ticks_since_overflow != OVERFLOW_RELOAD_TICK {
                     self.tima = value;
                     self.overflow = false;
                     self.ticks_since_overflow = 0;
@@ -55,10 +61,10 @@ impl Timer {
                 self.tma = value;
                 // If you write to TMA the same tick that TIMA is reloading,
                 // TIMA is also set with the new value
-                if self.ticks_since_overflow == 5 {
-                    self.tima = value; 
+                if self.ticks_since_overflow == OVERFLOW_RELOAD_TICK {
+                    self.tima = value;
                 }
-            },
+            }
             0xFF07 => {
                 let old_enabled = self.timer_enabled;
                 let old_bit = self.current_bit;
@@ -95,11 +101,11 @@ impl Timer {
         if self.overflow {
             self.ticks_since_overflow = self.ticks_since_overflow.wrapping_add(1);
 
-            if self.ticks_since_overflow == 4 {
+            if self.ticks_since_overflow == OVERFLOW_INTERRUPT_TICK {
                 io_registers.request_interrupt(InterruptBit::Timer);
-            } else if self.ticks_since_overflow == 5 {
+            } else if self.ticks_since_overflow == OVERFLOW_RELOAD_TICK {
                 self.tima = self.tma;
-            } else if self.ticks_since_overflow == 6 {
+            } else if self.ticks_since_overflow == OVERFLOW_RESET_TICK {
                 self.overflow = false;
                 self.ticks_since_overflow = 0;
             }

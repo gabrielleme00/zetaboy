@@ -4,7 +4,7 @@ pub mod memory_bus;
 mod registers;
 
 use crate::emulator::cart::Cart;
-use crate::emulator::cpu::memory_bus::io_registers::REG_IF;
+use crate::emulator::cpu::memory_bus::io_registers::{REG_IE, REG_IF};
 use crate::PRINT_STATE;
 use instructions::*;
 use memory_bus::*;
@@ -57,7 +57,14 @@ impl CPU {
                 pending = self.get_pending_interrupts();
             }
             HaltBug => {
-                unimplemented!("HaltBug");
+                let instr = self.read_instr();
+                self.reg.pc = self.reg.pc.wrapping_sub(1);
+                self.run_instr(instr);
+
+                self.mode = Normal;
+                if self.ime {
+                    pending = self.get_pending_interrupts();
+                }
             }
             HaltDI => {
                 self.tick4();
@@ -103,18 +110,10 @@ impl CPU {
         control_unit::execute(self, instruction);
     }
 
-    /// Ticks the timers for 1 T-cycle
-    fn tick(&mut self) {
-        // Timer
-        self.bus.timer.tick(&mut self.bus.io);
-        // PPU
-        self.bus.ppu.tick(&mut self.bus.io);
-    }
-
     /// Ticks the timers for 4 T-cycles (1 M-cycle)
     fn tick4(&mut self) {
         for _ in 0..4 {
-            self.tick();
+            self.bus.tick();
         }
     }
 
@@ -151,12 +150,25 @@ impl CPU {
             for i in 0..5 {
                 let mask = 1 << i;
                 if pending & mask != 0 {
-                    // Clear the interrupt flag
-                    self.bus
-                        .write_byte(REG_IF, self.bus.read_byte(REG_IF) & !mask);
+                    // Push the current upper byte of PC onto the stack
+                    self.reg.sp = self.reg.sp.wrapping_sub(1);
+                    self.write_byte(self.reg.sp, (self.reg.pc >> 8) as u8);
 
-                    // Push the current PC onto the stack
-                    self.alu_push(self.reg.pc);
+                    // If the interrupt is not enabled, cancel it's dispatch
+                    if self.reg.sp == REG_IE {
+                        if self.bus.read_byte(REG_IE) & mask == 0 {
+                            self.reg.pc = 0x0000;
+                            continue;
+                        }
+                    }
+
+                    // Push the current lower byte of PC onto the stack
+                    self.reg.sp = self.reg.sp.wrapping_sub(1);
+                    self.write_byte(self.reg.sp, (self.reg.pc & 0xFF) as u8);
+
+                    // Clear the interrupt flag
+                    let int_f = self.bus.read_byte(REG_IF);
+                    self.bus.write_byte(REG_IF, int_f & !mask);
 
                     // Jump to the interrupt vector
                     self.reg.pc = match i {
@@ -286,6 +298,9 @@ impl CPU {
 
     /// Adds the signed 8-bit `value` to SP.
     fn alu_add_sp(&mut self, value: i16) {
+        self.tick4();
+        self.tick4();
+
         let sp = self.reg.sp;
         let result = (sp as i16).wrapping_add(value) as u16;
 
@@ -295,8 +310,6 @@ impl CPU {
         self.reg.f.c = ((sp & 0xFF) + ((value as u16) & 0xFF)) > 0xFF;
 
         self.reg.sp = result;
-
-        self.tick4();
     }
 
     /// Compares register A and the given `value` by calculating: A - `value`.
@@ -506,6 +519,8 @@ impl CPU {
 
     /// Pops the last value from the stack.
     fn alu_pop(&mut self) -> u16 {
+        self.tick4();
+
         let lsb = self.read_byte(self.reg.sp) as u16;
         self.reg.sp = self.reg.sp.wrapping_add(1);
 
@@ -517,6 +532,8 @@ impl CPU {
 
     /// Pushes a `value` to the top of the stack.
     fn alu_push(&mut self, value: u16) {
+        self.tick4();
+
         self.reg.sp = self.reg.sp.wrapping_sub(1);
         self.write_byte(self.reg.sp, (value >> 8) as u8);
 

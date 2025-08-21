@@ -29,7 +29,7 @@ impl PPU {
         Self {
             buffer: vec![0; WIDTH * HEIGHT],
             vram: [0; VRAM_SIZE],
-            oam: [0; OAM_SIZE],
+            oam: [0xFF; OAM_SIZE],
             // bg_palette: [0; 32], // CGB
             // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
@@ -117,7 +117,7 @@ impl PPU {
             }
         }
 
-        io_registers.write(REG_LY, ly);
+        io_registers.force_write(REG_LY, ly);
 
         // --- Mode Determination and Interrupt Request ---
 
@@ -163,7 +163,7 @@ impl PPU {
         };
         let stat_with_flags =
             (io_registers.read(REG_STAT) & 0b11111000) | (new_mode as u8) | ly_eq_lyc_flag;
-        io_registers.write(REG_STAT, stat_with_flags);
+        io_registers.force_write(REG_STAT, stat_with_flags);
 
         // Check for LYC=LY interrupt (this is also an edge-triggered condition)
         let new_ly_eq_lyc = io_registers.read(REG_LY) == io_registers.read(REG_LYC);
