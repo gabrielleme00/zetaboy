@@ -42,6 +42,9 @@ impl PPU {
     }
 
     pub fn read_vram(&self, address: u16) -> u8 {
+        if self.mode == PPUMode::PixelTransfer {
+            return 0xFF;
+        }
         self.vram[(address - 0x8000) as usize]
     }
 
@@ -57,6 +60,10 @@ impl PPU {
     }
 
     pub fn read_oam(&self, address: u16) -> u8 {
+        if self.mode == PPUMode::PixelTransfer || self.mode == PPUMode::OAMSearch {
+            return 0xFF;
+        }
+
         if address < self.oam.len() as u16 {
             self.oam[address as usize]
         } else {
@@ -97,20 +104,17 @@ impl PPU {
     // }
 
     pub fn tick(&mut self, io_registers: &mut IORegisters) {
-        let ppu_dots = 4;
-
-        let mut ly = io_registers.read(REG_LY);
-
         let previous_mode = self.mode;
-        let previous_line = ly;
-        let previous_ly_eq_lyc = ly == io_registers.read(REG_LYC);
+        let previous_line = io_registers.read(REG_LY); // Read current LY before updating
+        let previous_ly_eq_lyc = previous_line == io_registers.read(REG_LYC);
 
         // --- Core PPU Clock & State Machine Logic ---
-        self.dot_counter += ppu_dots;
+        self.dot_counter += 1;
 
         // Handle end-of-line
+        let mut ly = previous_line;
         if self.dot_counter >= 456 {
-            self.dot_counter -= 456;
+            self.dot_counter = 0;
             ly += 1;
             if ly >= 154 {
                 ly = 0;
@@ -124,26 +128,23 @@ impl PPU {
         // Determine the new mode based on the current line and dot counter
         let new_mode = if ly >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
-            if previous_line == 143 {
+            if previous_line < 144 && ly >= 144 {
                 io_registers.request_interrupt(InterruptBit::VBlank);
             }
-            PPUMode::VBlank
+            PPUMode::VBlank // VBlank for ALL dots during lines 144-153
         } else {
-            // H-Blank Mode
-            if self.dot_counter >= 252 {
+            // Visible scanlines (0-143) - normal mode progression
+            if self.dot_counter < 80 {
+                PPUMode::OAMSearch
+            } else if self.dot_counter < 252 {
+                PPUMode::PixelTransfer
+            } else {
                 // The scanline is rendered when we *enter* H-Blank
                 if previous_mode != PPUMode::HBlank {
                     let bgp = io_registers.read(0xFF47);
                     self.render_scanline(io_registers, bgp);
                 }
-                // 80 (Mode 2) + 172 (Mode 3)
                 PPUMode::HBlank
-            // Pixel Transfer Mode
-            } else if self.dot_counter >= 80 {
-                PPUMode::PixelTransfer
-            // OAM Search Mode
-            } else {
-                PPUMode::OAMSearch
             }
         };
 
@@ -193,6 +194,19 @@ impl PPU {
         let ly = io_registers.read(REG_LY);
         let lcdc = io_registers.read(REG_LCDC);
 
+         // IF LCD is off, don't render
+        if (lcdc & 0x80) == 0 {
+            return;
+        }
+
+        // IF BG is disabled, fill with white
+        if (lcdc & 0x01) == 0 {
+            for x in 0..WIDTH {
+                self.buffer[ly as usize * WIDTH + x] = 0xFFFFFFFF;
+            }
+            return;
+        }
+
         // BG tile map selection
         let tile_map_addr = if (lcdc & 0x08) != 0 { 0x9C00 } else { 0x9800 };
 
@@ -212,15 +226,15 @@ impl PPU {
             let tile_map_y = (line_y as usize / 8) % 32;
 
             let tile_map_index = tile_map_y * 32 + tile_map_x;
-            let tile_id = self.read_vram(tile_map_addr + tile_map_index as u16);
+            let tile_id = self.vram[(tile_map_addr - 0x8000 + tile_map_index as u16) as usize];
 
             let tile_addr = get_tile_address(tile_id, lcdc);
 
             let tile_x = pixel_x % 8;
             let tile_y = line_y as usize % 8;
 
-            let byte1 = self.read_vram(tile_addr + (tile_y as u16) * 2);
-            let byte2 = self.read_vram(tile_addr + (tile_y as u16) * 2 + 1);
+            let byte1 = self.vram[(tile_addr - 0x8000 + (tile_y as u16) * 2) as usize];
+            let byte2 = self.vram[(tile_addr - 0x8000 + (tile_y as u16) * 2 + 1) as usize];
 
             let bit1 = (byte1 >> (7 - tile_x)) & 1;
             let bit2 = (byte2 >> (7 - tile_x)) & 1;
@@ -296,8 +310,8 @@ impl PPU {
                 tile
             };
             let tile_addr = get_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
-            let byte1 = self.read_vram(tile_addr);
-            let byte2 = self.read_vram(tile_addr + 1);
+            let byte1 = self.vram[tile_addr as usize - 0x8000];
+            let byte2 = self.vram[tile_addr as usize - 0x8000 + 1];
 
             for px in 0..8 {
                 let bit = if x_flip { px } else { 7 - px };
