@@ -228,10 +228,10 @@ impl PPU {
             return;
         }
 
-        // IF BG is disabled, fill with white
+        // IF BG is disabled, fill with 0th color
         if (lcdc & BIT_0) == 0 {
             for x in 0..WIDTH {
-                self.buffer[ly as usize * WIDTH + x] = 0xFFFFFFFF;
+                self.buffer[ly as usize * WIDTH + x] = self.get_final_color(0);
             }
             return;
         }
@@ -290,13 +290,7 @@ impl PPU {
             let color_index = (bit2 << 1) | bit1;
             // Use BG palette (DMG: 4 shades of gray)
             let color_value = (bgp_value >> (color_index * 2)) & 0x03;
-            let color = match color_value {
-                0 => 0xFFFFFFFF, // White
-                1 => 0xFFAAAAAA, // Light gray
-                2 => 0xFF555555, // Dark gray
-                3 => 0xFF000000, // Black
-                _ => unreachable!(),
-            };
+            let color = self.get_final_color(color_value);
             self.buffer[ly as usize * WIDTH + x] = color;
         }
 
@@ -374,7 +368,7 @@ impl PPU {
                 }
 
                 let screen_x_usize = screen_x as usize;
-                
+
                 // Check if this pixel position has already been drawn by a higher priority sprite
                 if sprite_pixels[screen_x_usize] {
                     continue;
@@ -386,7 +380,8 @@ impl PPU {
                     continue;
                 }
 
-                let color = get_color_from_palette(obp_value, color_index);
+                let color_value = (obp_value >> (color_index * 2)) & 0x03;
+                let color = self.get_final_color(color_value);
                 let idx = screen_y as usize * WIDTH + screen_x_usize;
 
                 // Priority: if OBJ has priority bit set (0x80), only draw over BG color 0
@@ -394,18 +389,25 @@ impl PPU {
                 if priority {
                     // Priority set: only draw over BG color 0 (white)
                     let bg_color = self.buffer[idx];
-                    if bg_color == 0xFFFFFFFF {
+                    if bg_color == self.get_final_color(0) {
                         self.buffer[idx] = color;
                     }
                 } else {
                     // Priority clear: OBJ always draws over BG
                     self.buffer[idx] = color;
                 }
-                
+
                 // Mark this pixel as drawn by a sprite
                 sprite_pixels[screen_x_usize] = true;
             }
         }
+    }
+
+    /// Returns the final color value (for framebuffer) for a given color value (0 - 3).
+    fn get_final_color(&self, color_value: u8) -> u32 {
+        // let palette = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000];
+        let palette = [0xFF9A9E3F, 0xFF496B22, 0xFF0E450B, 0xFF1B2A09];
+        palette[color_value as usize]
     }
 }
 
@@ -423,18 +425,6 @@ fn get_window_tile_address(tile_id: u8, lcdc: u8) -> u16 {
         let signed_id = tile_id as i8;
         let offset: i16 = signed_id as i16 * 16;
         (base_addr as i16 + offset) as u16
-    }
-}
-
-/// Returns ARGB color from `palette` based on `color_index`.
-fn get_color_from_palette(palette: u8, color_index: u8) -> u32 {
-    let color_value = (palette >> (color_index * 2)) & 0x03;
-    match color_value {
-        0 => 0xFFFFFFFF, // White
-        1 => 0xFFAAAAAA, // Light gray
-        2 => 0xFF555555, // Dark gray
-        3 => 0xFF000000, // Black
-        _ => unreachable!(),
     }
 }
 
