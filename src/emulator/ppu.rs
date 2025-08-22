@@ -22,6 +22,7 @@ pub struct PPU {
     // obj_palette: [u8; 32], // CGB
     pub mode: PPUMode,
     dot_counter: u16,
+    window_line: u8,
 }
 
 impl PPU {
@@ -34,6 +35,7 @@ impl PPU {
             // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
             dot_counter: 0,
+            window_line: 0,
         }
     }
 
@@ -113,15 +115,42 @@ impl PPU {
 
         // Handle end-of-line
         let mut ly = previous_line;
+        let mut new_scanline = false;
         if self.dot_counter >= 456 {
             self.dot_counter = 0;
             ly += 1;
             if ly >= 154 {
                 ly = 0;
             }
+            new_scanline = true;
         }
 
         io_registers.force_write(REG_LY, ly);
+
+        // --- Window internal line counter logic ---
+        // Reset window_line at start of frame (LY==0)
+        if ly == 0 {
+            self.window_line = 0;
+        }
+        // Only increment window_line if window is enabled and visible on this scanline
+        // The window_line should increment BEFORE rendering the scanline
+        if new_scanline && ly < 144 {
+            let lcdc = io_registers.read(REG_LCDC);
+            let wx = io_registers.read(REG_WX);
+            let wy = io_registers.read(REG_WY);
+            let window_enabled = (lcdc & BIT_5) != 0;
+            let window_visible = ly >= wy && wx <= 166 && wy <= 143;
+            if window_enabled && window_visible {
+                // Window line counter only increments when window is actually rendered
+                // Don't increment on the first line where window becomes visible
+                if ly > wy {
+                    self.window_line = self.window_line.wrapping_add(1);
+                }
+            } else if ly < wy {
+                // Reset window line counter when we're above the window Y position
+                self.window_line = 0;
+            }
+        }
 
         // --- Mode Determination and Interrupt Request ---
 
@@ -194,56 +223,73 @@ impl PPU {
         let ly = io_registers.read(REG_LY);
         let lcdc = io_registers.read(REG_LCDC);
 
-         // IF LCD is off, don't render
-        if (lcdc & 0x80) == 0 {
+        // IF LCD is off, don't render
+        if (lcdc & BIT_7) == 0 {
             return;
         }
 
         // IF BG is disabled, fill with white
-        if (lcdc & 0x01) == 0 {
+        if (lcdc & BIT_0) == 0 {
             for x in 0..WIDTH {
                 self.buffer[ly as usize * WIDTH + x] = 0xFFFFFFFF;
             }
             return;
         }
 
-        // BG tile map selection
-        let tile_map_addr = if (lcdc & 0x08) != 0 { 0x9C00 } else { 0x9800 };
+        // BG tile map selection (LCDC.3)
+        let bg_tile_map_addr = if (lcdc & BIT_3) != 0 { 0x9C00 } else { 0x9800 };
+
+        // Window tile map selection (LCDC.6)
+        let win_tile_map_addr = if (lcdc & BIT_6) != 0 { 0x9C00 } else { 0x9800 };
 
         // SCY/SCX registers (scroll Y/X)
         let scy = io_registers.read(REG_SCY);
         let scx = io_registers.read(REG_SCX);
 
+        // WX/WY registers
+        let wx = io_registers.read(REG_WX);
+        let wy = io_registers.read(REG_WY);
+
         // Calculate the effective line Y position
         let line_y = ly.wrapping_add(scy);
 
-        // --- Render Background ---
-        for x in 0..WIDTH {
-            let pixel_x = x.wrapping_add(scx as usize);
+        // Window enabled if LCDC.5 is set and ly >= wy and WX in range
+        let window_enabled = (lcdc & BIT_5) != 0;
+        let window_visible = ly >= wy && wx <= 166 && wy <= 143;
+        let mut window_x_counter = 0; // counts window pixels per line
 
-            // Find which tile this pixel is in
-            let tile_map_x = (pixel_x / 8) % 32;
-            let tile_map_y = (line_y as usize / 8) % 32;
+        for x in 0..WIDTH {
+            let use_window = window_enabled && window_visible && (x as u8) >= wx.wrapping_sub(7);
+            let (tile_map_addr, tile_map_x, tile_map_y, tile_x, tile_y) = if use_window {
+                // Window coordinates
+                let win_x = window_x_counter;
+                let win_y = self.window_line as usize;
+                let tile_map_x = (win_x / 8) % 32;
+                let tile_map_y = (win_y / 8) % 32;
+                let tile_x = win_x % 8;
+                let tile_y = win_y % 8;
+                window_x_counter += 1;
+                (win_tile_map_addr, tile_map_x, tile_map_y, tile_x, tile_y)
+            } else {
+                // Background coordinates
+                let pixel_x = x.wrapping_add(scx as usize);
+                let tile_map_x = (pixel_x / 8) % 32;
+                let tile_map_y = (line_y as usize / 8) % 32;
+                let tile_x = pixel_x % 8;
+                let tile_y = line_y as usize % 8;
+                (bg_tile_map_addr, tile_map_x, tile_map_y, tile_x, tile_y)
+            };
 
             let tile_map_index = tile_map_y * 32 + tile_map_x;
             let tile_id = self.vram[(tile_map_addr - 0x8000 + tile_map_index as u16) as usize];
-
-            let tile_addr = get_tile_address(tile_id, lcdc);
-
-            let tile_x = pixel_x % 8;
-            let tile_y = line_y as usize % 8;
-
+            let tile_addr = get_window_tile_address(tile_id, lcdc);
             let byte1 = self.vram[(tile_addr - 0x8000 + (tile_y as u16) * 2) as usize];
             let byte2 = self.vram[(tile_addr - 0x8000 + (tile_y as u16) * 2 + 1) as usize];
-
             let bit1 = (byte1 >> (7 - tile_x)) & 1;
             let bit2 = (byte2 >> (7 - tile_x)) & 1;
-
             let color_index = (bit2 << 1) | bit1;
-
             // Use BG palette (DMG: 4 shades of gray)
             let color_value = (bgp_value >> (color_index * 2)) & 0x03;
-
             let color = match color_value {
                 0 => 0xFFFFFFFF, // White
                 1 => 0xFFAAAAAA, // Light gray
@@ -251,12 +297,11 @@ impl PPU {
                 3 => 0xFF000000, // Black
                 _ => unreachable!(),
             };
-
             self.buffer[ly as usize * WIDTH + x] = color;
         }
 
         // --- Render Sprites (OBJ) ---
-        if (lcdc & 0x02) != 0 {
+        if (lcdc & BIT_1) != 0 {
             self.render_sprites(lcdc, io_registers);
         }
     }
@@ -264,7 +309,7 @@ impl PPU {
     /// Renders sprites for the current scanline, respecting priority, palette, and flipping.
     fn render_sprites(&mut self, lcdc: u8, io_registers: &IORegisters) {
         let ly = io_registers.read(REG_LY);
-        let sprite_height = if (lcdc & 0x04) != 0 { 16 } else { 8 };
+        let sprite_height = if (lcdc & BIT_2) != 0 { 16 } else { 8 };
         let mut sprites_on_line = Vec::new();
 
         // OAM: 4 bytes per sprite, 40 sprites max
@@ -277,17 +322,21 @@ impl PPU {
 
             // Is this sprite visible on the current line?
             if (ly as i16) >= y && (ly as i16) < y + sprite_height {
-                sprites_on_line.push((x, y, tile, attr));
+                sprites_on_line.push((x, y, tile, attr, i)); // Include OAM index
                 if sprites_on_line.len() == 10 {
                     break; // Hardware limit: max 10 sprites per line
                 }
             }
         }
 
-        // Lower X coordinate has priority (hardware behavior)
-        sprites_on_line.sort_by_key(|&(x, _, _, _)| x);
+        // Sort by X coordinate first, then by OAM index (lower index = higher priority)
+        sprites_on_line.sort_by_key(|&(x, _, _, _, oam_index)| (x, oam_index));
 
-        for &(x, y, tile, attr) in &sprites_on_line {
+        // Track which pixels have been drawn by sprites (for priority)
+        let mut sprite_pixels = vec![false; WIDTH];
+
+        // Render sprites in order (lower OAM index has priority)
+        for &(x, y, tile, attr, _oam_index) in &sprites_on_line {
             let dmg_palette = (attr & 0x10) != 0;
             let x_flip = (attr & 0x20) != 0;
             let y_flip = (attr & 0x40) != 0;
@@ -309,7 +358,7 @@ impl PPU {
             } else {
                 tile
             };
-            let tile_addr = get_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
+            let tile_addr = get_window_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
             let byte1 = self.vram[tile_addr as usize - 0x8000];
             let byte2 = self.vram[tile_addr as usize - 0x8000 + 1];
 
@@ -319,29 +368,42 @@ impl PPU {
                 let bit2 = (byte2 >> bit) & 1;
                 let color_index = (bit2 << 1) | bit1;
 
-                // Color index 0 is transparent for OBJ
-                if color_index == 0 {
-                    continue;
-                }
-
-                let color = get_color_from_palette(obp_value, color_index);
-
                 let (screen_x, screen_y) = (x + px as i16, ly as i16);
                 if is_pixel_out_of_bounds(screen_x, screen_y) {
                     continue;
                 }
 
-                let idx = screen_y as usize * WIDTH + screen_x as usize;
+                let screen_x_usize = screen_x as usize;
+                
+                // Check if this pixel position has already been drawn by a higher priority sprite
+                if sprite_pixels[screen_x_usize] {
+                    continue;
+                }
 
-                // Priority: if OBJ has priority, only draw if BG color is 0
+                // Color index 0 is transparent for OBJ, but still blocks lower priority sprites
+                if color_index == 0 {
+                    sprite_pixels[screen_x_usize] = true; // Mark as drawn (blocks lower priority)
+                    continue;
+                }
+
+                let color = get_color_from_palette(obp_value, color_index);
+                let idx = screen_y as usize * WIDTH + screen_x_usize;
+
+                // Priority: if OBJ has priority bit set (0x80), only draw over BG color 0
+                // If priority bit is clear, OBJ always draws over BG
                 if priority {
+                    // Priority set: only draw over BG color 0 (white)
                     let bg_color = self.buffer[idx];
                     if bg_color == 0xFFFFFFFF {
                         self.buffer[idx] = color;
                     }
                 } else {
+                    // Priority clear: OBJ always draws over BG
                     self.buffer[idx] = color;
                 }
+                
+                // Mark this pixel as drawn by a sprite
+                sprite_pixels[screen_x_usize] = true;
             }
         }
     }
@@ -350,8 +412,8 @@ impl PPU {
 /// Returns the tile address in VRAM for a given tile ID and LCDC register.
 ///
 /// LCDC bit 4: BG & Window tile data area.
-fn get_tile_address(tile_id: u8, lcdc: u8) -> u16 {
-    if (lcdc >> 4) & 0b1 == 1 {
+fn get_window_tile_address(tile_id: u8, lcdc: u8) -> u16 {
+    if (lcdc >> 4) & 0b1 != 0 {
         let base_addr: u16 = 0x8000;
         // Unsigned addressing (0x8000-0x8FFF)
         base_addr + (tile_id as u16 * 16)

@@ -1,11 +1,11 @@
-pub mod io_registers;
 mod dma;
+pub mod io_registers;
 
 use crate::emulator::cart::Cart;
 use crate::emulator::ppu::*;
 use crate::emulator::timer::Timer;
-use io_registers::*;
 use dma::Dma;
+use io_registers::*;
 
 const HRAM_SIZE: usize = 0x7F;
 const WRAM_SIZE: usize = 0x8000;
@@ -70,10 +70,16 @@ impl MemoryBus {
 
     pub fn write_byte(&mut self, address: u16, value: u8) {
         if self.dma.is_enabled() {
-            // During a DMA transfer, CPU can only access HRAM and the
-            // OAM area is blocked
-            if address < 0xFF80 || (0xFE00..=0xFE9F).contains(&address) {
+            // During DMA, only OAM area is blocked for CPU access
+            // MBC registers and other areas should still be accessible
+            if (0xFE00..=0xFE9F).contains(&address) {
                 return;
+            }
+            // Also block access to most memory areas except HRAM and MBC registers
+            match address {
+                0x0000..=0x7FFF => {} // Allow MBC register writes
+                0xFF80..=0xFFFF => {} // Allow HRAM and IO
+                _ => return,          // Block everything else
             }
         }
 

@@ -3,14 +3,41 @@ mod licensee;
 
 use std::{error::Error, fs, path::Path};
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum MBCType {
+    None,
+    MBC1,
+    MBC2,
+    MBC3,
+    MBC5,
+    MBC6,
+    MBC7,
+}
+
+impl MBCType {
+    fn from_byte(byte: u8) -> Self {
+        match byte {
+            0x00 => MBCType::None,
+            0x01 | 0x02 | 0x03 => MBCType::MBC1,
+            0x05 | 0x06 => MBCType::MBC2,
+            0x11 | 0x12 | 0x13 => MBCType::MBC3,
+            0x19 | 0x1A | 0x1B => MBCType::MBC5,
+            0x20 => MBCType::MBC6,
+            0x22 => MBCType::MBC7,
+            _ => MBCType::None,
+        }
+    }
+}
+
 pub struct Cart {
     pub rom_data: Vec<u8>,
     header: Header,
-    // MBC state
     rom_bank: usize,
     ram_bank: usize,
     ram_enabled: bool,
     ram_data: Vec<u8>,
+    mbc_type: MBCType,
+    mbc1_mode: u8, // 0 = ROM banking mode, 1 = RAM banking mode
 }
 
 struct Header {
@@ -32,25 +59,29 @@ impl Cart {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let rom_data = fs::read(path)?;
         let header = Header::new(&rom_data);
-        
+
         // Initialize RAM based on header info
         let ram_size = match header.ram_size {
             0 => 0,
-            1 => 0, // Unused
-            2 => 8 * 1024,      // 8 kB
-            3 => 32 * 1024,     // 32 kB
-            4 => 128 * 1024,    // 128 kB
-            5 => 64 * 1024,     // 64 kB
+            1 => 0,          // Unused
+            2 => 8 * 1024,   // 8 kB
+            3 => 32 * 1024,  // 32 kB
+            4 => 128 * 1024, // 128 kB
+            5 => 64 * 1024,  // 64 kB
             _ => 0,
         };
-        
-        Ok(Self { 
-            rom_data, 
+
+        let mbc_type = MBCType::from_byte(header.cart_type);
+
+        Ok(Self {
+            rom_data,
             header,
             rom_bank: 1, // Start at bank 1 (bank 0 is fixed)
             ram_bank: 0,
             ram_enabled: false,
             ram_data: vec![0; ram_size],
+            mbc_type,
+            mbc1_mode: 0,
         })
     }
 
@@ -77,6 +108,14 @@ impl Cart {
 
     /// Read from ROM area (0x0000-0x7FFF)
     pub fn read_rom(&self, address: u16) -> u8 {
+        match self.mbc_type {
+            MBCType::None => self.handle_nombc_read(address),
+            MBCType::MBC1 => self.handle_mbc1_read(address),
+            _ => unimplemented!("MBC type {:?} not implemented", self.mbc_type),
+        }
+    }
+
+    fn handle_nombc_read(&self, address: u16) -> u8 {
         let address = address as usize;
         match address {
             0x0000..=0x3FFF => {
@@ -101,8 +140,48 @@ impl Cart {
         }
     }
 
+    fn handle_mbc1_read(&self, address: u16) -> u8 {
+        let address = address as usize;
+        match address {
+            0x0000..=0x3FFF => {
+                // Bank 0 (or bank 0/1/2/3 in 4MB+ ROMs with banking mode)
+                let bank = if self.mbc1_mode == 0 {
+                    0
+                } else {
+                    self.rom_bank & 0x60
+                };
+                let real_address = bank * 0x4000 + address;
+                if real_address < self.rom_data.len() {
+                    self.rom_data[real_address]
+                } else {
+                    0xFF
+                }
+            }
+            0x4000..=0x7FFF => {
+                // Switchable ROM bank
+                let max_banks = self.rom_data.len() / 0x4000;
+                let bank = self.rom_bank % max_banks.max(1);
+                let real_address = bank * 0x4000 + (address - 0x4000);
+                if real_address < self.rom_data.len() {
+                    self.rom_data[real_address]
+                } else {
+                    0xFF
+                }
+            }
+            _ => 0xFF,
+        }
+    }
+
     /// Write to ROM area (triggers MBC operations)
     pub fn write_rom(&mut self, address: u16, value: u8) {
+        match self.mbc_type {
+            MBCType::None => self.handle_nombc_write(address, value),
+            MBCType::MBC1 => self.handle_mbc1_write(address, value),
+            _ => unimplemented!("MBC type {:?} not implemented", self.mbc_type),
+        }
+    }
+
+    fn handle_nombc_write(&mut self, address: u16, value: u8) {
         match address {
             0x0000..=0x1FFF => {
                 // RAM Enable
@@ -126,6 +205,39 @@ impl Cart {
         }
     }
 
+    fn handle_mbc1_write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => {
+                // RAM Enable
+                self.ram_enabled = (value & 0x0F) == 0x0A;
+            }
+            0x2000..=0x3FFF => {
+                // Lower 5 bits of ROM bank number
+                let value = (value & 0x1F) as usize;
+                self.rom_bank = (self.rom_bank & 0x60) | if value == 0 { 1 } else { value };
+            }
+            0x4000..=0x5FFF => {
+                // Upper 2 bits of ROM bank or RAM bank (depending on mode)
+                let value = (value & 0x03) as usize;
+                if self.mbc1_mode == 0 {
+                    // ROM banking mode
+                    self.rom_bank = (self.rom_bank & 0x1F) | (value << 5);
+                } else {
+                    // RAM banking mode
+                    self.ram_bank = value;
+                }
+            }
+            0x6000..=0x7FFF => {
+                // Banking mode select
+                self.mbc1_mode = value & 0x01;
+                if self.mbc1_mode == 0 {
+                    self.ram_bank = 0; // In ROM mode, RAM bank is always 0
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Read from RAM area (0xA000-0xBFFF)
     pub fn read_ram(&self, address: u16) -> u8 {
         if !self.ram_enabled || self.ram_data.is_empty() {
@@ -133,7 +245,13 @@ impl Cart {
         }
 
         let address = (address - 0xA000) as usize;
-        let bank_offset = 0x2000 * self.ram_bank;
+        let bank = if self.mbc_type == MBCType::MBC1 && self.mbc1_mode == 1 {
+            self.ram_bank
+        } else {
+            0
+        };
+
+        let bank_offset = 0x2000 * bank;
         let real_address = bank_offset + address;
 
         if real_address < self.ram_data.len() {
@@ -150,7 +268,13 @@ impl Cart {
         }
 
         let address = (address - 0xA000) as usize;
-        let bank_offset = 0x2000 * self.ram_bank;
+        let bank = if self.mbc_type == MBCType::MBC1 && self.mbc1_mode == 1 {
+            self.ram_bank
+        } else {
+            0
+        };
+
+        let bank_offset = 0x2000 * bank;
         let real_address = bank_offset + address;
 
         if real_address < self.ram_data.len() {

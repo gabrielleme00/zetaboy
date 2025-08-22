@@ -40,8 +40,8 @@ mod addresses {
     pub const REG_BGP: u16 = 0xFF47;
     pub const REG_OBP0: u16 = 0xFF48;
     pub const REG_OBP1: u16 = 0xFF49;
-    // pub const REG_WY: u16 = 0xFF4A;
-    // pub const REG_WX: u16 = 0xFF4B;
+    pub const REG_WY: u16 = 0xFF4A;
+    pub const REG_WX: u16 = 0xFF4B;
     // pub const REG_KEY1: u16 = 0xFF4D;
     // pub const REG_VBK: u16 = 0xFF4F;
     pub const REG_HDMA1: u16 = 0xFF51;
