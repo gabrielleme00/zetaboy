@@ -5,7 +5,7 @@ Game Boy emulator in Rust.
 
 ## Accuracy Tests
 
-### Blargg's (Multi-ROMs)
+Can be found at https://github.com/retrio/gb-test-roms/
 
 | Symbol | Meaning     |
 |--------|-------------|
@@ -13,7 +13,7 @@ Game Boy emulator in Rust.
 | ❌     | Fails       |
 | ⚠️     | Unsupported |
 
-Can be found at https://github.com/retrio/gb-test-roms/
+### Blargg's (Multi-ROMs)
 
 | Test ROM        |    | Note     |
 |-----------------|----| -------- |
