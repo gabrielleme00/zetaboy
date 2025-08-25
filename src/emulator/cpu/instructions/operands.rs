@@ -53,7 +53,7 @@ pub enum LoadType {
     // ByteAddressFromA(_),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadByteTarget {
     A,
     B,
@@ -65,7 +65,7 @@ pub enum LoadByteTarget {
     HLI,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadByteSource {
     A,
     B,

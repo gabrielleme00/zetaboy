@@ -18,7 +18,7 @@ pub struct MemoryBus {
     wram: [u8; WRAM_SIZE],
     wram_bank: usize,
     pub io: IORegisters,
-    dma: Dma,
+    pub dma: Dma,
 }
 
 impl MemoryBus {
@@ -46,7 +46,22 @@ impl MemoryBus {
             0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank],
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
-            0xFE00..=0xFE9F => self.ppu.read_oam(address),
+            0xFE00..=0xFE9F => {
+                if self.dma.is_enabled() && !self.ppu.can_use_oam() {
+                    println!(
+                        "PPU read OAM IGNORED at {:#04X} in mode {:?}",
+                        address, self.ppu.mode
+                    );
+                    0xFF
+                } else {
+                    let value = self.ppu.read_oam(address);
+                    println!(
+                        "PPU read OAM at {:#04X} in mode {:?} -> {}",
+                        address, self.ppu.mode, value
+                    );
+                    value
+                }
+            }
             0xFEA0..=0xFEFF => 0x00,
             0xFF00..=0xFF7F => match address {
                 0xFF04..=0xFF07 => self.timer.read(address),
@@ -67,28 +82,8 @@ impl MemoryBus {
     pub fn get_interrupt_enable(&self) -> u8 {
         self.io.read(REG_IE)
     }
-
-    pub fn write_byte(&mut self, address: u16, value: u8) {
-        if self.dma.is_enabled() {
-            // During DMA, only OAM area is blocked for CPU access
-            // MBC registers and other areas should still be accessible
-            if (0xFE00..=0xFE9F).contains(&address) {
-                return;
-            }
-            // Also block access to most memory areas except HRAM and MBC registers
-            match address {
-                0x0000..=0x7FFF => {} // Allow MBC register writes
-                0xFF80..=0xFFFF => {} // Allow HRAM and IO
-                _ => return,          // Block everything else
-            }
-        }
-
-        // Perform the write operation
-        self.perform_write_byte(address, value);
-    }
-
     /// Writes a byte of `value` to the `address`.
-    fn perform_write_byte(&mut self, address: u16, value: u8) {
+    pub fn write_byte(&mut self, address: u16, value: u8) {
         let address_usize = address as usize;
         match address {
             0x0000..=0x7FFF => self.cart.write_rom(address, value),
@@ -98,7 +93,11 @@ impl MemoryBus {
             0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank] = value,
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000] = value, // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank] = value,
-            0xFE00..=0xFE9F => self.ppu.write_oam(address, value),
+            0xFE00..=0xFE9F => {
+                if self.ppu.can_use_oam() && !self.dma.is_enabled() {
+                    self.ppu.write_oam(address, value);
+                }
+            }
             0xFEA0..=0xFEFF => {} // Unused OAM area
             0xFF00..=0xFF7F => match address {
                 0xFF04..=0xFF07 => self.timer.write(address, value, &mut self.io),
@@ -142,8 +141,8 @@ impl MemoryBus {
     pub fn dma_tick(&mut self) {
         if let Some((source, destination)) = self.dma.tick() {
             // Perform the DMA transfer
-            let byte = self.read_byte(source);
-            self.perform_write_byte(destination, byte);
+            let value = self.read_byte(source);
+            self.ppu.write_oam(destination, value);
         }
     }
 }

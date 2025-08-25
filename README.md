@@ -36,8 +36,8 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | bits/unused_hwio-GS              | ⚠️ | GBS Only |
 | instr/daa                        | ✅ |          |
 | interrupts/ie_push               | ✅ |          |
-| oam_dma/basic                    | ❌ |          |
-| oam_dma/reg_read                 | ❌ |          |
+| oam_dma/basic                    | ✅ |          |
+| oam_dma/reg_read                 | ✅ |          |
 | oam_dma/sources-GS               | ⚠️ | GBS Only |
 | ppu/hblank_ly_scx_timing-GS      | ❌ |          |
 | ppu/intr_1_2_timing-GS           | ⚠️ | GBS Only |

@@ -1,5 +1,5 @@
 const TRANSFER_SIZE: u16 = 0xA0;
-const DELAY_T_CYCLES: u8 = 1;
+const DELAY_T_CYCLES: u8 = 4;
 const DESTINATION_START: u16 = 0xFE00;
 
 pub struct Dma {
@@ -35,21 +35,22 @@ impl Dma {
             return None;
         }
 
-        self.delay -= 1;
+        if self.delay > 0 {
+            self.delay -= 1;
+        }
 
         if self.delay == 0 {
-            // Reset delay
-            self.delay = DELAY_T_CYCLES; // Reset delay for next byte
-
-            // Build transfer request
+            // time to transfer a byte
             let source = self.source + self.copied;
             let destination = DESTINATION_START + self.copied;
             let transfer_request = (source, destination);
 
-            // Increment copied bytes and check if transfer is complete
             self.copied += 1;
+
             if self.copied >= TRANSFER_SIZE {
                 self.enabled = false;
+            } else {
+                self.delay = DELAY_T_CYCLES;
             }
 
             return Some(transfer_request);

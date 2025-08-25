@@ -61,11 +61,11 @@ impl PPU {
         }
     }
 
-    pub fn read_oam(&self, address: u16) -> u8 {
-        if self.mode == PPUMode::PixelTransfer || self.mode == PPUMode::OAMSearch {
-            return 0xFF;
-        }
+    pub fn can_use_oam(&self) -> bool {
+        self.mode != PPUMode::PixelTransfer && self.mode != PPUMode::OAMSearch
+    }
 
+    pub fn read_oam(&self, address: u16) -> u8 {
         if address < self.oam.len() as u16 {
             self.oam[address as usize]
         } else {
