@@ -78,10 +78,10 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | boot_regs-mgb                    | ⚠️ |          |
 | boot_regs-sgb2                   | ⚠️ |          |
 | boot_regs-sgb                    | ⚠️ |          |
-| call_cc_timing2                  | ❌ |          |
-| call_cc_timing                   | ❌ |          |
-| call_timing2                     | ❌ |          |
-| call_timing                      | ❌ |          |
+| call_cc_timing2                  | ✅ |          |
+| call_cc_timing                   | ✅ |          |
+| call_timing2                     | ✅ |          |
+| call_timing                      | ✅ |          |
 | di_timing-GS                     | ⚠️ |          |
 | div_timing                       | ✅ |          |
 | ei_sequence                      | ✅ |          |
@@ -92,20 +92,20 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | halt_ime1_timing                 | ✅ |          |
 | if_ie_registers                  | ❌ |          |
 | intr_timing                      | ✅ |          |
-| jp_cc_timing                     | ❌ |          |
-| jp_timing                        | ❌ |          |
-| ld_hl_sp_e_timing                | ❌ |          |
-| oam_dma_restart                  | ❌ |          |
+| jp_cc_timing                     | ✅ |          |
+| jp_timing                        | ✅ |          |
+| ld_hl_sp_e_timing                | ✅ |          |
+| oam_dma_restart                  | ✅ |          |
 | oam_dma_start                    | ❌ |          |
-| oam_dma_timing                   | ❌ |          |
+| oam_dma_timing                   | ✅ |          |
 | pop_timing                       | ❌ |          |
-| push_timing                      | ❌ |          |
+| push_timing                      | ✅ |          |
 | rapid_di_ei                      | ✅ |          |
 | ret_cc_timing                    | ❌ |          |
 | reti_intr_timing                 | ✅ |          |
 | reti_timing                      | ❌ |          |
 | ret_timing                       | ❌ |          |
-| rst_timing                       | ❌ |          |
+| rst_timing                       | ✅ |          |
 
 ### Others
 
