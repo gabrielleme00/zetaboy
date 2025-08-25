@@ -27,7 +27,7 @@ impl Dma {
         self.source = (source as u16) << 8;
         self.copied = 0;
         self.enabled = true;
-        self.delay = DELAY_T_CYCLES; // 4 T-cycles delay before each transfer
+        self.delay = DELAY_T_CYCLES * 2; // Initial delay before first transfer
     }
 
     pub fn tick(&mut self) -> Option<(u16, u16)> {
@@ -40,18 +40,18 @@ impl Dma {
         }
 
         if self.delay == 0 {
+            if self.copied >= TRANSFER_SIZE {
+                self.enabled = false;
+                return None;
+            }
+
             // time to transfer a byte
             let source = self.source + self.copied;
             let destination = DESTINATION_START + self.copied;
             let transfer_request = (source, destination);
 
             self.copied += 1;
-
-            if self.copied >= TRANSFER_SIZE {
-                self.enabled = false;
-            } else {
-                self.delay = DELAY_T_CYCLES;
-            }
+            self.delay = DELAY_T_CYCLES;
 
             return Some(transfer_request);
         }

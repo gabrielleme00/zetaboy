@@ -65,7 +65,7 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | timer/tima_reload                | ✅ |          |
 | timer/tima_write_reloading       | ✅ |          |
 | timer/tma_write_reloading        | ✅ |          |
-| add_sp_e_timing                  | ❌ |          |
+| add_sp_e_timing                  | ✅ |          |
 | boot_div2-S                      | ⚠️ |          |
 | boot_div-dmg0                    | ❌ |          |
 | boot_div-dmgABCmgb               | ⚠️ |          |

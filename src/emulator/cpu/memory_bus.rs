@@ -47,7 +47,7 @@ impl MemoryBus {
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFE00..=0xFE9F => {
-                if self.dma.is_enabled() && !self.ppu.can_use_oam() {
+                if self.dma.is_enabled() {
                     println!(
                         "PPU read OAM IGNORED at {:#04X} in mode {:?}",
                         address, self.ppu.mode
