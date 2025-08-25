@@ -23,6 +23,7 @@ pub struct PPU {
     pub mode: PPUMode,
     dot_counter: u16,
     window_line: u8,
+    bg_color_indices: Vec<u8>,
 }
 
 impl PPU {
@@ -36,6 +37,7 @@ impl PPU {
             mode: PPUMode::OAMSearch,
             dot_counter: 0,
             window_line: 0,
+            bg_color_indices: vec![0; WIDTH * HEIGHT],
         }
     }
 
@@ -66,19 +68,11 @@ impl PPU {
     }
 
     pub fn read_oam(&self, address: u16) -> u8 {
-        if address < self.oam.len() as u16 {
-            self.oam[address as usize]
-        } else {
-            self.oam[(address - 0xFE00) as usize]
-        }
+        self.oam[(address - 0xFE00) as usize]
     }
 
     pub fn write_oam(&mut self, address: u16, value: u8) {
-        if address < self.oam.len() as u16 {
-            self.oam[address as usize] = value;
-        } else {
-            self.oam[(address - 0xFE00) as usize] = value;
-        }
+        self.oam[(address - 0xFE00) as usize] = value;
     }
 
     // pub fn read_bg_palette_ram(&self, address: u16) -> u8 {
@@ -292,6 +286,7 @@ impl PPU {
             let color_value = (bgp_value >> (color_index * 2)) & 0x03;
             let color = self.get_final_color(color_value);
             self.buffer[ly as usize * WIDTH + x] = color;
+            self.bg_color_indices[ly as usize * WIDTH + x] = color_index;
         }
 
         // --- Render Sprites (OBJ) ---
@@ -347,12 +342,23 @@ impl PPU {
             } as u8;
 
             // For 8x16 sprites, lower bit of tile ignored (hardware behavior)
-            let tile_num = if sprite_height == 16 {
-                tile & 0xFE
+            let (tile_num, line_in_tile) = if sprite_height == 16 {
+                let top_half = line_in_sprite < 8;
+                let tile_num = if top_half {
+                    tile & 0xFE
+                } else {
+                    (tile & 0xFE).wrapping_add(1)
+                };
+                let line_in_tile = if top_half {
+                    line_in_sprite
+                } else {
+                    line_in_sprite - 8
+                };
+                (tile_num, line_in_tile)
             } else {
-                tile
+                (tile, line_in_sprite)
             };
-            let tile_addr = get_window_tile_address(tile_num, lcdc) + (line_in_sprite as u16) * 2;
+            let tile_addr = get_sprite_tile_address(tile_num) + (line_in_tile as u16) * 2;
             let byte1 = self.vram[tile_addr as usize - 0x8000];
             let byte2 = self.vram[tile_addr as usize - 0x8000 + 1];
 
@@ -386,10 +392,10 @@ impl PPU {
 
                 // Priority: if OBJ has priority bit set (0x80), only draw over BG color 0
                 // If priority bit is clear, OBJ always draws over BG
+                let bg_color_index = self.bg_color_indices[idx];
                 if priority {
-                    // Priority set: only draw over BG color 0 (white)
-                    let bg_color = self.buffer[idx];
-                    if bg_color == self.get_final_color(0) {
+                    // Only draw over BG color 0
+                    if bg_color_index == 0 {
                         self.buffer[idx] = color;
                     }
                 } else {
@@ -426,6 +432,11 @@ fn get_window_tile_address(tile_id: u8, lcdc: u8) -> u16 {
         let offset: i16 = signed_id as i16 * 16;
         (base_addr as i16 + offset) as u16
     }
+}
+
+/// Returns the tile address in VRAM for a given sprite tile ID.
+fn get_sprite_tile_address(tile_num: u8) -> u16 {
+    0x8000 + (tile_num as u16) * 16
 }
 
 /// Checks if a pixel is out of the screen bounds.
