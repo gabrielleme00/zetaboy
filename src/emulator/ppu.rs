@@ -21,7 +21,7 @@ pub struct PPU {
     // bg_palette: [u8; 32], // CGB
     // obj_palette: [u8; 32], // CGB
     pub mode: PPUMode,
-    dot_counter: u16,
+    pub dot_counter: u16,
     window_line: u8,
     bg_color_indices: Vec<u8>,
 }
@@ -31,7 +31,7 @@ impl PPU {
         Self {
             buffer: vec![0; WIDTH * HEIGHT],
             vram: [0; VRAM_SIZE],
-            oam: [0xFF; OAM_SIZE],
+            oam: [0; OAM_SIZE],
             // bg_palette: [0; 32], // CGB
             // obj_palette: [0; 32], // CGB
             mode: PPUMode::OAMSearch,
@@ -102,7 +102,7 @@ impl PPU {
     pub fn tick(&mut self, io_registers: &mut IORegisters) {
         let previous_mode = self.mode;
         let previous_line = io_registers.read(REG_LY); // Read current LY before updating
-        let previous_ly_eq_lyc = previous_line == io_registers.read(REG_LYC);
+        let lcdc = io_registers.read(REG_LCDC);
 
         // --- Core PPU Clock & State Machine Logic ---
         self.dot_counter += 1;
@@ -129,7 +129,6 @@ impl PPU {
         // Only increment window_line if window is enabled and visible on this scanline
         // The window_line should increment BEFORE rendering the scanline
         if new_scanline && ly < 144 {
-            let lcdc = io_registers.read(REG_LCDC);
             let wx = io_registers.read(REG_WX);
             let wy = io_registers.read(REG_WY);
             let window_enabled = (lcdc & BIT_5) != 0;
@@ -151,7 +150,7 @@ impl PPU {
         // Determine the new mode based on the current line and dot counter
         let new_mode = if ly >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
-            if previous_line < 144 && ly >= 144 {
+            if previous_line < 144 && ly >= 144 && (lcdc & BIT_5) != 0 {
                 io_registers.request_interrupt(InterruptBit::VBlank);
             }
             PPUMode::VBlank // VBlank for ALL dots during lines 144-153
@@ -176,12 +175,14 @@ impl PPU {
 
         // --- STAT Interrupt and Register Updates ---
 
-        // Check for STAT interrupts (now edge-triggered)
-        self.check_stat_interrupts(io_registers, previous_mode);
+        // Check for STAT interrupts on mode change
+        if self.mode != previous_mode {
+            self.check_stat_interrupts(io_registers);
+        }
 
         // Update STAT register with the new mode and LYC=LY flag
         let ly_eq_lyc_flag = if io_registers.read(REG_LY) == io_registers.read(REG_LYC) {
-            0b00000100
+            BIT_2
         } else {
             0
         };
@@ -190,26 +191,33 @@ impl PPU {
         io_registers.force_write(REG_STAT, stat_with_flags);
 
         // Check for LYC=LY interrupt (this is also an edge-triggered condition)
-        let new_ly_eq_lyc = io_registers.read(REG_LY) == io_registers.read(REG_LYC);
-        if !previous_ly_eq_lyc && new_ly_eq_lyc {
-            // The condition just became true, check if interrupt is enabled
-            if (io_registers.read(REG_STAT) & 0b01000000) != 0 {
-                io_registers.request_interrupt(InterruptBit::LCDStat);
-            }
-        }
+        self.check_lyc(io_registers);
+        self.check_stat_interrupts(io_registers);
     }
 
-    fn check_stat_interrupts(&mut self, io_registers: &mut IORegisters, previous_mode: PPUMode) {
+    pub fn check_lyc(&mut self, io_registers: &mut IORegisters) {
+        let ly = io_registers.read(REG_LY);
+        let lyc = io_registers.read(REG_LYC);
         let stat = io_registers.read(REG_STAT);
 
-        if self.mode != previous_mode {
-            if (self.mode == PPUMode::HBlank && (stat & BIT_3) != 0)
-                || (self.mode == PPUMode::VBlank && (stat & BIT_4) != 0)
-                || (self.mode == PPUMode::OAMSearch && (stat & BIT_5) != 0)
-                || (stat & BIT_6) & (stat & BIT_2) != 0
-            {
-                io_registers.request_interrupt(InterruptBit::LCDStat);
-            }
+        let ly_eq_lyc = ly == lyc;
+        let new_stat = if ly_eq_lyc {
+            stat | BIT_2 // Set LYC=LY flag
+        } else {
+            stat & !BIT_2 // Clear LYC=LY flag
+        };
+        io_registers.force_write(REG_STAT, new_stat);
+    }
+
+    pub fn check_stat_interrupts(&mut self, io_registers: &mut IORegisters) {
+        let stat = io_registers.read(REG_STAT);
+
+        if (self.mode == PPUMode::HBlank && (stat & BIT_3) != 0) ||
+            (self.mode == PPUMode::VBlank && (stat & BIT_4) != 0) ||
+            (self.mode == PPUMode::OAMSearch && (stat & BIT_5) != 0) ||
+            (stat & BIT_6) & (stat & BIT_2) != 0
+        {
+            io_registers.request_interrupt(InterruptBit::LCDStat);
         }
     }
 

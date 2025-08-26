@@ -31,7 +31,7 @@ Can be found at https://github.com/retrio/gb-test-roms/
 
 | Test ROM                         |    | Note     |
 |----------------------------------|----| -------- |
-| bits/mem_oam                     | ❌ |          |
+| bits/mem_oam                     | ✅ |          |
 | bits/reg_f                       | ✅ |          |
 | bits/unused_hwio-GS              | ⚠️ | GBS Only |
 | instr/daa                        | ✅ |          |
@@ -39,16 +39,16 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | oam_dma/basic                    | ✅ |          |
 | oam_dma/reg_read                 | ✅ |          |
 | oam_dma/sources-GS               | ⚠️ | GBS Only |
-| ppu/hblank_ly_scx_timing-GS      | ❌ |          |
+| ppu/hblank_ly_scx_timing-GS      | ⚠️ | GBS Only |
 | ppu/intr_1_2_timing-GS           | ⚠️ | GBS Only |
-| ppu/intr_2_0_timing              | ❌ |          |
+| ppu/intr_2_0_timing              | ✅ |          |
 | ppu/intr_2_mode0_timing_sprites  | ❌ |          |
 | ppu/intr_2_mode0_timing          | ❌ |          |
 | ppu/intr_2_mode3_timing          | ❌ |          |
 | ppu/intr_2_oam_ok_timing         | ❌ |          |
 | ppu/lcdon_timing-GS              | ⚠️ | GBS Only |
 | ppu/lcdon_write_timing-GS        | ⚠️ | GBS Only |
-| ppu/stat_irq_blocking            | ❌ |          |
+| ppu/stat_irq_blocking            | ⚠️ | NOT DMG0 |
 | ppu/stat_lyc_onoff               | ❌ |          |
 | ppu/vblank_stat_intr-GS          | ⚠️ | GBS Only |
 | serial/boot_sclk_align-dmgABCmgb | ⚠️ |          |

@@ -4,6 +4,7 @@ pub mod io_registers;
 use crate::emulator::cart::Cart;
 use crate::emulator::ppu::*;
 use crate::emulator::timer::Timer;
+use crate::utils::bits::BIT_7;
 use dma::Dma;
 use io_registers::*;
 
@@ -47,18 +48,23 @@ impl MemoryBus {
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
             0xFE00..=0xFE9F => {
-                if self.dma.is_enabled() {
+                let lcdc = self.io.read(REG_LCDC);
+                let lcd_enabled = (lcdc & BIT_7) != 0;
+
+                if !lcd_enabled {
+                    // When LCD is disabled, OAM is always accessible
+                    self.ppu.read_oam(address)
+                } else if self.dma.is_enabled() {
+                    // During DMA with LCD on, cpu reads always return 0xFF
                     println!(
-                        "PPU read OAM IGNORED at {:#04X} in mode {:?}",
-                        address, self.ppu.mode
+                        "Ignored read from OAM at {:#06X} during DMA",
+                        address
                     );
                     0xFF
                 } else {
+                    // Normal OAM access
                     let value = self.ppu.read_oam(address);
-                    println!(
-                        "PPU read OAM at {:#04X} in mode {:?} -> {}",
-                        address, self.ppu.mode, value
-                    );
+                    println!("Read {:#04X} from OAM at {:#06X}", value, address);
                     value
                 }
             }
@@ -94,26 +100,51 @@ impl MemoryBus {
             0xE000..=0xEFFF => self.wram[address_usize - 0xE000] = value, // WRAM mirror
             0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank] = value,
             0xFE00..=0xFE9F => {
-                if self.ppu.can_use_oam() && !self.dma.is_enabled() {
+                let lcdc = self.io.read(REG_LCDC);
+                let lcd_enabled = (lcdc & BIT_7) != 0;
+
+                if !lcd_enabled {
+                    // When LCD is disabled, OAM is always accessible
                     self.ppu.write_oam(address, value);
+                } else if self.ppu.can_use_oam() && !self.dma.is_enabled() {
+                    // LCD is on, normal OAM access (with restrictions)
+                    self.ppu.write_oam(address, value);
+                    println!("Wrote {:#04X} to OAM at {:#06X}", value, address);
+                } else {
+                    println!(
+                        "Ignored write to OAM at {:#06X} while in mode {:?} or during DMA",
+                        address, self.ppu.mode
+                    );
                 }
             }
             0xFEA0..=0xFEFF => {} // Unused OAM area
             0xFF00..=0xFF7F => match address {
                 0xFF04..=0xFF07 => self.timer.write(address, value, &mut self.io),
                 0xFF40 => {
-                    let lcdc = self.io.read(0xFF40);
-                    if lcdc & 0x80 != 0 && value & 0x80 == 0 {
-                        // Disabling bit 7 (LCD & PPY enable) can only happen
-                        // during V-Blank
-                        if self.ppu.is_vblank() {
-                            self.ppu.mode = PPUMode::HBlank;
-                        } else {
-                            // Write to the LCDC register without changing the mode
-                            self.io.write(0xFF40, value & 0x7F);
-                        }
-                    } else {
-                        self.io.write(0xFF40, value);
+                    let lcdc = self.io.read(address);
+                    let lcd_was_on = lcdc & BIT_7 != 0;
+
+                    self.io.write(address, value);
+                    let lcd_is_on = value & BIT_7 != 0;
+
+                    if lcd_was_on && !lcd_is_on {
+                        self.ppu.mode = PPUMode::HBlank;
+                        self.ppu.dot_counter = 0;
+                        self.io.write(REG_LY, 0);
+                    } else if !lcd_was_on && lcd_is_on {
+                        self.ppu.mode = PPUMode::OAMSearch;
+                        self.ppu.dot_counter = 0;
+                        self.io.write(REG_LY, 0);
+                        self.ppu.check_lyc(&mut self.io);
+                        self.ppu.check_stat_interrupts(&mut self.io);
+                    }
+                }
+                0xFF45 => {
+                    self.io.write(address, value);
+                    let lcd_is_on = value & BIT_7 != 0;
+                    if lcd_is_on {
+                        self.ppu.check_lyc(&mut self.io);
+                        self.ppu.check_stat_interrupts(&mut self.io);
                     }
                 }
                 0xFF46 => {
