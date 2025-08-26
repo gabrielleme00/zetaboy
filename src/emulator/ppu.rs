@@ -233,7 +233,7 @@ impl PPU {
         // IF BG is disabled, fill with 0th color
         if (lcdc & BIT_0) == 0 {
             for x in 0..WIDTH {
-                self.buffer[ly as usize * WIDTH + x] = self.get_final_color(0);
+                self.buffer[ly as usize * WIDTH + x] = self.get_output_color(0);
             }
             return;
         }
@@ -292,7 +292,7 @@ impl PPU {
             let color_index = (bit2 << 1) | bit1;
             // Use BG palette (DMG: 4 shades of gray)
             let color_value = (bgp_value >> (color_index * 2)) & 0x03;
-            let color = self.get_final_color(color_value);
+            let color = self.get_output_color(color_value);
             self.buffer[ly as usize * WIDTH + x] = color;
             self.bg_color_indices[ly as usize * WIDTH + x] = color_index;
         }
@@ -395,7 +395,7 @@ impl PPU {
                 }
 
                 let color_value = (obp_value >> (color_index * 2)) & 0x03;
-                let color = self.get_final_color(color_value);
+                let color = self.get_output_color(color_value);
                 let idx = screen_y as usize * WIDTH + screen_x_usize;
 
                 // Priority: if OBJ has priority bit set (0x80), only draw over BG color 0
@@ -418,7 +418,7 @@ impl PPU {
     }
 
     /// Returns the final color value (for framebuffer) for a given color value (0 - 3).
-    fn get_final_color(&self, color_value: u8) -> u32 {
+    fn get_output_color(&self, color_value: u8) -> u32 {
         // let palette = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000];
         let palette = [0xFF9A9E3F, 0xFF496B22, 0xFF0E450B, 0xFF1B2A09];
         palette[color_value as usize]
