@@ -519,8 +519,6 @@ impl CPU {
 
     /// Pops the last value from the stack.
     fn alu_pop(&mut self) -> u16 {
-        self.tick4();
-
         let lsb = self.read_byte(self.reg.sp) as u16;
         self.reg.sp = self.reg.sp.wrapping_add(1);
 

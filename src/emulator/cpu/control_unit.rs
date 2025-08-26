@@ -484,9 +484,12 @@ fn push(cpu: &mut CPU, source: StackOperand) {
 }
 
 fn ret(cpu: &mut CPU, test: Option<FlagCondition>) {
-    cpu.tick4();
     if cpu.test_jump_condition(test) {
+        if let Some(_) = test {
+            cpu.tick4();
+        }
         cpu.reg.pc = cpu.alu_pop();
+        cpu.tick4();
     }
 }
 

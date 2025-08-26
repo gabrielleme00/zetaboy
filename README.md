@@ -98,13 +98,13 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | oam_dma_restart                  | ✅ |          |
 | oam_dma_start                    | ❌ |          |
 | oam_dma_timing                   | ✅ |          |
-| pop_timing                       | ❌ |          |
+| pop_timing                       | ✅ |          |
 | push_timing                      | ✅ |          |
 | rapid_di_ei                      | ✅ |          |
-| ret_cc_timing                    | ❌ |          |
+| ret_cc_timing                    | ✅ |          |
 | reti_intr_timing                 | ✅ |          |
-| reti_timing                      | ❌ |          |
-| ret_timing                       | ❌ |          |
+| reti_timing                      | ✅ |          |
+| ret_timing                       | ✅ |          |
 | rst_timing                       | ✅ |          |
 
 ### Others
