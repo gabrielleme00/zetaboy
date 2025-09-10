@@ -78,6 +78,11 @@ impl PPU {
     }
 
     pub fn tick(&mut self, io_registers: &mut IORegisters) {
+        // If LCD is off, do nothing
+        if io_registers.read(REG_LCDC) & BIT_7 == 0 {
+            return;
+        }
+
         let previous_mode = self.mode;
         let previous_line = io_registers.read(REG_LY); // Read current LY before updating
         let lcdc = io_registers.read(REG_LCDC);
@@ -128,7 +133,7 @@ impl PPU {
         // Determine the new mode based on the current line and dot counter
         let new_mode = if ly >= 144 {
             // V-Blank interrupt is requested ONCE, when line transitions to 144
-            if previous_line < 144 && ly >= 144 {
+            if previous_line == 143 && ly == 144 {
                 io_registers.request_interrupt(InterruptBit::VBlank);
             }
             PPUMode::VBlank // VBlank for ALL dots during lines 144-153
@@ -152,24 +157,18 @@ impl PPU {
 
         // --- STAT Interrupt and Register Updates ---
 
-        // Check for STAT interrupts on mode change
+        // Update STAT register with the new mode and LYC=LY flag
+        let ly = io_registers.read(REG_LY);
+        let lyc = io_registers.read(REG_LYC);
+        let ly_eq_lyc_flag = if ly == lyc { BIT_2 } else { 0 };
+
+        let stat = io_registers.read(REG_STAT);
+        let stat_with_flags = (stat & 0xF8) | (new_mode as u8) | ly_eq_lyc_flag;
+        io_registers.force_write(REG_STAT, stat_with_flags);
+
         if self.mode != previous_mode {
             self.check_stat_interrupts(io_registers);
         }
-
-        // Update STAT register with the new mode and LYC=LY flag
-        let ly_eq_lyc_flag = if io_registers.read(REG_LY) == io_registers.read(REG_LYC) {
-            BIT_2
-        } else {
-            0
-        };
-        let stat_with_flags =
-            (io_registers.read(REG_STAT) & 0b11111000) | (new_mode as u8) | ly_eq_lyc_flag;
-        io_registers.force_write(REG_STAT, stat_with_flags);
-
-        // Check for LYC=LY interrupt (this is also an edge-triggered condition)
-        self.check_lyc(io_registers);
-        self.check_stat_interrupts(io_registers);
     }
 
     pub fn check_lyc(&mut self, io_registers: &mut IORegisters) {
@@ -192,7 +191,7 @@ impl PPU {
         if (self.mode == PPUMode::HBlank && (stat & BIT_3) != 0)
             || (self.mode == PPUMode::VBlank && (stat & BIT_4) != 0)
             || (self.mode == PPUMode::OAMSearch && (stat & BIT_5) != 0)
-            || (stat & BIT_6) & (stat & BIT_2) != 0
+            || ((stat & BIT_6) != 0 && (stat & BIT_2) != 0)
         {
             io_registers.request_interrupt(InterruptBit::LCDStat);
         }
@@ -263,7 +262,7 @@ impl PPU {
 
             let tile_map_index = tile_map_y * 32 + tile_map_x;
             let tile_id = self.vram[vram_index(tile_map_addr) + tile_map_index];
-            let tile_addr = get_window_tile_address(tile_id, lcdc_data.bg_window_tile_data);
+            let tile_addr = get_tile_address(tile_id, lcdc_data.bg_window_tile_data);
 
             let (byte1, byte2) = self.read_vram_pair(tile_addr + (tile_y as u16) * 2);
             let bit1 = (byte1 >> (7 - tile_x)) & BIT_0;
@@ -293,6 +292,7 @@ impl PPU {
     fn get_visible_sprites(&self, ly: u8, sprite_height: u8) -> Vec<RenderSprite> {
         let mut visible_sprites = Vec::new();
 
+        // Check all 40 sprites in OAM
         for i in 0..40 {
             let oam_sprite = OAMSprite::at_oam(&self.oam, i);
             let render_sprite = RenderSprite::from(oam_sprite);
@@ -305,6 +305,15 @@ impl PPU {
             }
         }
 
+        // Sort by X position (lower X first), then by OAM index (lower index first)
+        visible_sprites.sort_by(|a, b| {
+            if a.screen_x != b.screen_x {
+                a.screen_x.cmp(&b.screen_x) // Lower X has higher priority
+            } else {
+                a.oam_index.cmp(&b.oam_index) // Lower OAM index has higher priority
+            }
+        });
+
         visible_sprites
     }
 
@@ -316,19 +325,15 @@ impl PPU {
         let sprite_height: u8 = get_sprite_height(lcdc_data.obj_size);
         let visible_sprites = self.get_visible_sprites(ly, sprite_height);
 
-        // Render sprites in order (lower OAM index has priority)
-        for sprite in visible_sprites {
+        // Render sprites in reverse order so lower OAM index sprites draw on top
+        for sprite in visible_sprites.iter().rev() {
             let obp = io_registers.read(sprite.get_obp_address());
             let line_in_sprite = sprite.get_line_in_sprite(ly, sprite_height);
 
             // For 8x16 sprites, lower bit of tile ignored (hardware behavior)
-            let (tile_num, line_in_tile) = if sprite_height == 16 {
+            let (tile_num, line_offset) = if sprite_height == 16 {
                 let top_half = line_in_sprite < 8;
-                let tile_num = if top_half {
-                    sprite.tile_index & 0xFE
-                } else {
-                    (sprite.tile_index & 0xFE).wrapping_add(1)
-                };
+                let tile_num = (sprite.tile_index & 0xFE) + if top_half { 0 } else { 1 };
                 let line_in_tile = if top_half {
                     line_in_sprite
                 } else {
@@ -339,7 +344,7 @@ impl PPU {
                 (sprite.tile_index, line_in_sprite)
             };
 
-            let tile_addr = get_sprite_tile_address(tile_num) + (line_in_tile as u16) * 2;
+            let tile_addr = get_sprite_tile_address(tile_num) + (line_offset as u16) * 2;
             let (byte1, byte2) = self.read_vram_pair(tile_addr);
 
             for px in 0..SPRITE_WIDTH {
@@ -359,12 +364,11 @@ impl PPU {
                 }
 
                 let pixel_x_usize = pixel_x as usize;
-                let pixel_y_usize = pixel_y as usize;
+                let buffer_index = ly as usize * WIDTH + pixel_x_usize;
 
                 // Get OBJ palette
                 let dmg_color = self.get_dmg_color(obp, color_index);
                 let out_color = self.get_output_color(dmg_color);
-                let buffer_index = pixel_y_usize * WIDTH + pixel_x_usize;
 
                 if sprite.bg_priority {
                     // Only draw over BG color 0
@@ -397,7 +401,7 @@ fn vram_index(addr: u16) -> usize {
 }
 
 /// Returns the height of a sprite based on the LCDC register.
-/// 
+///
 /// LCDC bit 2: 0 = 8x8 sprites, 1 = 8x16 sprites
 fn get_sprite_height(lcdc_obj_size: bool) -> u8 {
     if lcdc_obj_size {
@@ -410,7 +414,7 @@ fn get_sprite_height(lcdc_obj_size: bool) -> u8 {
 /// Returns a tile's address in VRAM for a given ID and addressing mode.
 ///
 /// LCDC bit 4: BG & Window tile data area.
-fn get_window_tile_address(tile_id: u8, bg_window_tile_data: bool) -> u16 {
+fn get_tile_address(tile_id: u8, bg_window_tile_data: bool) -> u16 {
     if bg_window_tile_data {
         let base_addr: u16 = 0x8000;
         // Unsigned addressing (0x8000-0x8FFF)

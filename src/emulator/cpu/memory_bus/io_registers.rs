@@ -195,7 +195,7 @@ impl IORegisters {
             }
             REG_IF => self.mem[local_addr] = value & 0x1F, // Only lower 5 bits are writable
             REG_NR52 => self.mem[local_addr] = value & 0x80 | (self.mem[local_addr] & 0x7F), // Only bit 7 is writable
-            REG_STAT => self.mem[local_addr] = (self.mem[local_addr] & 0x83) | (value & 0x7C), // Bits 0-2 are read-only
+            REG_STAT => self.mem[local_addr] = (self.mem[local_addr] & 0x83) | (value & 0b_1111_1000), // Bits 0-2 are read-only
             REG_IE => self.mem[local_addr] = value & 0x1F, // Only lower 5 bits are writable
             REG_LY => {} // LY is read only
             _ => self.mem[local_addr] = value,

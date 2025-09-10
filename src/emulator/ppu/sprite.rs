@@ -12,17 +12,19 @@ pub struct OAMSprite {
     pub x: u8,
     pub tile_index: u8,
     pub attributes: u8,
+    pub oam_index: usize,
 }
 
 impl OAMSprite {
     /// Creates a new OAMSprite from OAM data by an index (0-39).
-    pub fn at_oam(oam: &[u8], sprite_index: usize) -> Self {
-        let base = sprite_index * SPRITE_SIZE_BYTES as usize;
+    pub fn at_oam(oam: &[u8], oam_index: usize) -> Self {
+        let base = oam_index * SPRITE_SIZE_BYTES as usize;
         Self {
             y: oam[base],
             x: oam[base + 1],
             tile_index: oam[base + 2],
             attributes: oam[base + 3],
+            oam_index,
         }
     }
 }
@@ -37,6 +39,7 @@ pub struct RenderSprite {
     pub x_flip: bool,
     pub y_flip: bool,
     pub bg_priority: bool, // true = behind BG colors 1-3
+    pub oam_index: usize,
 }
 
 impl From<OAMSprite> for RenderSprite {
@@ -50,6 +53,7 @@ impl From<OAMSprite> for RenderSprite {
             x_flip: (attr & BIT_5) != 0,
             y_flip: (attr & BIT_6) != 0,
             bg_priority: (attr & BIT_7) != 0,
+            oam_index: oam_sprite.oam_index,
         }
     }
 }

@@ -139,6 +139,17 @@ impl MemoryBus {
                         self.ppu.check_stat_interrupts(&mut self.io);
                     }
                 }
+                0xFF41 => {
+                    // Undocumented GameBoy bug, needed by Road Rash
+                    // http://www.devrs.com/gb/files/faqs.html#GBBugs
+                    if self.ppu.mode == PPUMode::VBlank || self.ppu.mode == PPUMode::HBlank {
+                        let lcd_enabled = self.io.read(REG_LCDC) & BIT_7 != 0;
+                        if lcd_enabled {
+                            self.io.request_interrupt(InterruptBit::LCDStat);
+                        }
+                    }
+                    self.io.write(address, value);
+                }
                 0xFF45 => {
                     self.io.write(address, value);
                     let lcd_is_on = value & BIT_7 != 0;
