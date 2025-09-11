@@ -78,31 +78,30 @@ impl PPU {
     }
 
     pub fn tick(&mut self, io_registers: &mut IORegisters) {
+        let lcdc_data = LcdcData::from(io_registers.read(REG_LCDC));
+
         // If LCD is off, do nothing
-        if io_registers.read(REG_LCDC) & BIT_7 == 0 {
+        if !lcdc_data.lcd_enable {
             return;
         }
 
         let previous_mode = self.mode;
-        let previous_line = io_registers.read(REG_LY); // Read current LY before updating
-        let lcdc = io_registers.read(REG_LCDC);
+        let previous_line = io_registers.read(REG_LY);
 
         // --- Core PPU Clock & State Machine Logic ---
         self.dot_counter += 1;
 
         // Handle end-of-line
         let mut ly = previous_line;
-        let mut new_scanline = false;
-        if self.dot_counter >= 456 {
+        let new_scanline = self.dot_counter == 456;
+        if new_scanline {
             self.dot_counter = 0;
             ly += 1;
-            if ly >= 154 {
+            if ly == 154 {
                 ly = 0;
             }
-            new_scanline = true;
+            io_registers.force_write(REG_LY, ly);
         }
-
-        io_registers.force_write(REG_LY, ly);
 
         // --- Window internal line counter logic ---
         // Reset window_line at start of frame (LY==0)
@@ -114,7 +113,7 @@ impl PPU {
         if new_scanline && ly < 144 {
             let wx = io_registers.read(REG_WX);
             let wy = io_registers.read(REG_WY);
-            let window_enabled = (lcdc & BIT_5) != 0;
+            let window_enabled = lcdc_data.window_enable;
             let window_visible = ly >= wy && wx <= 166 && wy <= 143;
             if window_enabled && window_visible {
                 // Window line counter only increments when window is actually rendered
@@ -122,9 +121,6 @@ impl PPU {
                 if ly > wy {
                     self.window_line = self.window_line.wrapping_add(1);
                 }
-            } else if ly < wy {
-                // Reset window line counter when we're above the window Y position
-                self.window_line = 0;
             }
         }
 
@@ -158,7 +154,6 @@ impl PPU {
         // --- STAT Interrupt and Register Updates ---
 
         // Update STAT register with the new mode and LYC=LY flag
-        let ly = io_registers.read(REG_LY);
         let lyc = io_registers.read(REG_LYC);
         let ly_eq_lyc_flag = if ly == lyc { BIT_2 } else { 0 };
 
@@ -242,7 +237,7 @@ impl PPU {
 
         // For each pixel in the line
         for x in 0..WIDTH {
-            let use_window = window_enabled && window_visible && (x as u8) >= wx.wrapping_sub(7);
+            let use_window = window_enabled && window_visible && (x as u8) >= wx.saturating_sub(7);
             let (tile_map_addr, x_coord, y_coord) = if use_window {
                 // Window coordinates
                 let x_coord = window_x_counter;
@@ -261,7 +256,8 @@ impl PPU {
             let tile_y = y_coord % 8;
 
             let tile_map_index = tile_map_y * 32 + tile_map_x;
-            let tile_id = self.vram[vram_index(tile_map_addr) + tile_map_index];
+            let tile_id_addr = tile_map_addr + tile_map_index as u16;
+            let tile_id = self.vram[vram_index(tile_id_addr)];
             let tile_addr = get_tile_address(tile_id, lcdc_data.bg_window_tile_data);
 
             let (byte1, byte2) = self.read_vram_pair(tile_addr + (tile_y as u16) * 2);
