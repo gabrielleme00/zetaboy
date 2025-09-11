@@ -9,8 +9,9 @@ use crate::PRINT_STATE;
 use instructions::*;
 use memory_bus::*;
 use registers::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub enum CpuMode {
     Normal,
     Halt,
@@ -20,6 +21,7 @@ pub enum CpuMode {
     EnableIME,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct CPU {
     pub reg: Registers,
     pub bus: MemoryBus,

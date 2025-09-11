@@ -1,4 +1,6 @@
 use crate::{utils::bits::*, PRINT_SERIAL};
+use serde::{Deserialize, Serialize};
+use serde_arrays;
 
 mod addresses {
     pub const REG_P1: u16 = 0xFF00;
@@ -91,9 +93,10 @@ impl JoypadButton {
         }
     }
 }
-
+#[derive(Clone, Deserialize, Serialize)]
 pub struct IORegisters {
     joypad_state: u8,
+    #[serde(with = "serde_arrays")]
     mem: [u8; REG_MEM_SIZE as usize],
 }
 

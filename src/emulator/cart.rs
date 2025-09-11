@@ -4,7 +4,9 @@ mod licensee;
 use core::panic;
 use std::{error::Error, fs, path::Path};
 use mbc_type::MBCType;
+use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Cart {
     pub rom_data: Vec<u8>,
     header: Header,
@@ -17,9 +19,10 @@ pub struct Cart {
     rom_banks_number: usize,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
 struct Header {
-    _entry: [u8; 4],
-    _logo: [u8; 0x30],
+    // _entry: [u8; 4],
+    // _logo: [u8; 0x30],
     title: [u8; 16],
     new_lic_code: u16,
     _sgb_flag: u8,
@@ -294,8 +297,8 @@ impl Cart {
 impl Header {
     fn new(rom: &[u8]) -> Self {
         Self {
-            _entry: rom[0x100..=0x103].try_into().unwrap(),
-            _logo: rom[0x104..=0x133].try_into().unwrap(),
+            // _entry: rom[0x100..=0x103].try_into().unwrap(),
+            // _logo: rom[0x104..=0x133].try_into().unwrap(),
             title: rom[0x134..=0x143].try_into().unwrap(),
             new_lic_code: ((rom[0x144] as u16) << 8) | rom[0x145] as u16,
             _sgb_flag: rom[0x146],

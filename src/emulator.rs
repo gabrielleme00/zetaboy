@@ -10,6 +10,8 @@ use cpu::CPU;
 use minifb::{Key, Window, WindowOptions};
 use ppu::{HEIGHT, WIDTH};
 use std::error::Error;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use std::time::{Duration, Instant};
 
 const FRAME_DURATION: Duration = Duration::from_nanos(1_000_000_000 / 60); // 16.67ms per frame
@@ -47,6 +49,8 @@ pub struct Emulator {
     cpu: CPU,
     prev_vblank: bool,
     input_config: InputConfig,
+    can_change_state: bool,
+    state_file_path: String,
 }
 
 impl Emulator {
@@ -76,6 +80,8 @@ impl Emulator {
             cpu: CPU::new(cart),
             prev_vblank: false,
             input_config: InputConfig::new(),
+            can_change_state: true,
+            state_file_path: filename.to_string() + ".sav",
         })
     }
 
@@ -131,7 +137,31 @@ impl Emulator {
     fn handle_input(&mut self) {
         use JoypadButton::*;
 
-        // Gather input
+        // Gather emulator control input
+        let save = self.is_key_down(Key::F1);
+        let load = self.is_key_down(Key::F2);
+
+        // Handle save/load state
+        if self.can_change_state {
+            if save {
+                self.save_state().unwrap();
+                self.can_change_state = false;
+                return;
+            } else if load {
+                if let Err(e) = self.load_state() {
+                    eprintln!("Failed to load state: {}", e);
+                }
+                self.can_change_state = false;
+                return;
+            }
+        } else {
+            if !save && !load {
+                self.can_change_state = true;
+                return;
+            }
+        }
+
+        // Gather GameBoy input
         let right = self.is_key_down(self.input_config.right);
         let left = self.is_key_down(self.input_config.left);
         let up = self.is_key_down(self.input_config.up);
@@ -158,5 +188,30 @@ impl Emulator {
 
     fn set_button_state(&mut self, button: JoypadButton, state: bool) {
         self.cpu.bus.io.set_button_state(button, state);
+    }
+
+    pub fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let path = &self.state_file_path;
+        let state = self.cpu.clone();
+
+        let file = File::create(path)?;
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &state)?;
+
+        println!("Saved state to {}", path);
+        Ok(())
+    }
+
+    pub fn load_state(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let path = &self.state_file_path;
+        let file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
+        let reader = BufReader::new(file);
+
+        let state: CPU = bincode::deserialize_from(reader)
+            .map_err(|e| format!("Failed to deserialize {}: {}", path, e))?;
+        self.cpu = state;
+
+        println!("Loaded state from {}", path);
+        Ok(())
     }
 }

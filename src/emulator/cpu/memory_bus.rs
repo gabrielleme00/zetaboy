@@ -7,15 +7,19 @@ use crate::emulator::timer::Timer;
 use crate::utils::bits::BIT_7;
 use dma::Dma;
 use io_registers::*;
+use serde::{Deserialize, Serialize};
 
 const HRAM_SIZE: usize = 0x7F;
 const WRAM_SIZE: usize = 0x8000;
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct MemoryBus {
     cart: Cart,
     pub ppu: PPU,
     pub timer: Timer,
+    #[serde(with = "serde_arrays")]
     hram: [u8; HRAM_SIZE],
+    #[serde(with = "serde_arrays")]
     wram: [u8; WRAM_SIZE],
     wram_bank: usize,
     pub io: IORegisters,

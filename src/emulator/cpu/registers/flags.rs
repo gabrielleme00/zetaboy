@@ -6,7 +6,9 @@ const CARRY_FLAG_POS: u8 = 4;
 
 use std::convert;
 
-#[derive(Default, Copy, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Default, Copy, Clone, Deserialize, Serialize)]
 pub struct FlagsRegister {
     pub z: bool, // Zero
     pub n: bool, // Subtract

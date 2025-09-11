@@ -3,6 +3,7 @@ mod sprite;
 
 use crate::{emulator::cpu::memory_bus::io_registers::*, utils::bits::*};
 use lcdc::LcdcData;
+use serde::{Deserialize, Serialize};
 use sprite::{OAMSprite, RenderSprite, SPRITE_WIDTH};
 
 pub const WIDTH: usize = 160;
@@ -13,7 +14,7 @@ const OAM_SIZE: usize = 160;
 
 const MAX_SPRITES_PER_SCANLINE: usize = 10;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum PPUMode {
     HBlank = 0,
     VBlank = 1,
@@ -21,9 +22,12 @@ pub enum PPUMode {
     PixelTransfer = 3,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct PPU {
     pub buffer: Vec<u32>,
+    #[serde(with = "serde_arrays")]
     vram: [u8; VRAM_SIZE],
+    #[serde(with = "serde_arrays")]
     oam: [u8; OAM_SIZE],
     pub mode: PPUMode,
     pub dot_counter: u16,

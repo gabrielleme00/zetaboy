@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 const TRANSFER_SIZE: u16 = 0xA0;
 const DELAY_T_CYCLES: u8 = 4;
 const DESTINATION_START: u16 = 0xFE00;
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Dma {
     source: u16,
     copied: u16,

@@ -2,12 +2,14 @@ use crate::{
     emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit},
     utils::bits::*,
 };
+use serde::{Deserialize, Serialize};
 
 const BITS: [u8; 4] = [9, 3, 5, 7];
 const OVERFLOW_INTERRUPT_TICK: u8 = 4;
 const OVERFLOW_RELOAD_TICK: u8 = 5;
 const OVERFLOW_RESET_TICK: u8 = 6;
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Timer {
     pub div: u16, // 0xFF04
     pub tima: u8, // 0xFF05

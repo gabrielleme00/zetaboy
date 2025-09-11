@@ -1,7 +1,9 @@
 mod flags;
 
 pub use flags::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Registers {
     pub a: u8, // Accumulator
     pub b: u8,
