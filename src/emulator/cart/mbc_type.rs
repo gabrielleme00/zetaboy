@@ -65,4 +65,8 @@ impl MBCType {
             _ => "UNKNOWN",
         }
     }
+
+    pub fn has_battery(code: u8) -> bool {
+        matches!(code, 0x03 | 0x06 | 0x09 | 0x0D | 0x0F | 0x10 | 0x13 | 0x1B | 0x1E | 0x22)
+    }
 }

@@ -13,7 +13,7 @@ pub struct Cart {
     rom_bank: usize,
     ram_bank: usize,
     ram_enabled: bool,
-    ram_data: Vec<u8>,
+    pub ram_data: Vec<u8>,
     mbc_type: MBCType,
     mbc1_mode: u8, // 0 = ROM banking mode, 1 = RAM banking mode
     rom_banks_number: usize,
@@ -93,6 +93,10 @@ impl Cart {
             mbc1_mode: 0,
             rom_banks_number,
         })
+    }
+
+    pub fn has_battery(&self) -> bool {
+        MBCType::has_battery(self.header.cart_type)
     }
 
     pub fn print_info(&self) {

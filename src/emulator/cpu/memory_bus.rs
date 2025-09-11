@@ -14,7 +14,7 @@ const WRAM_SIZE: usize = 0x8000;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct MemoryBus {
-    cart: Cart,
+    pub cart: Cart,
     pub ppu: PPU,
     pub timer: Timer,
     #[serde(with = "serde_arrays")]

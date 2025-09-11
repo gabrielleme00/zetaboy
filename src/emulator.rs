@@ -11,7 +11,8 @@ use minifb::{Key, Window, WindowOptions};
 use ppu::{HEIGHT, WIDTH};
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 const FRAME_DURATION: Duration = Duration::from_nanos(1_000_000_000 / 60); // 16.67ms per frame
@@ -50,7 +51,7 @@ pub struct Emulator {
     prev_vblank: bool,
     input_config: InputConfig,
     can_change_state: bool,
-    state_file_path: String,
+    rom_path: PathBuf,
 }
 
 impl Emulator {
@@ -73,7 +74,7 @@ impl Emulator {
             panic!("Error building window: {}", e);
         });
 
-        Ok(Emulator {
+        let mut emulator = Self {
             window,
             paused: false,
             running: true,
@@ -81,8 +82,14 @@ impl Emulator {
             prev_vblank: false,
             input_config: InputConfig::new(),
             can_change_state: true,
-            state_file_path: filename.to_string() + ".sav",
-        })
+            rom_path: PathBuf::from(filename),
+        };
+
+        if let Err(e) = emulator.load_sram() {
+            eprintln!("Failed to load SRAM: {}", e);
+        }
+
+        Ok(emulator)
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
@@ -93,7 +100,8 @@ impl Emulator {
             self.handle_input();
 
             if self.window.is_key_down(Key::Escape) || !self.running {
-                return Ok(());
+                self.running = false;
+                break;
             }
 
             if self.paused {
@@ -123,6 +131,9 @@ impl Emulator {
             if frame_time < FRAME_DURATION {
                 std::thread::sleep(FRAME_DURATION - frame_time);
             }
+        }
+        if let Err(e) = self.save_sram() {
+            eprintln!("Failed to save SRAM: {}", e);
         }
         Ok(())
     }
@@ -190,8 +201,9 @@ impl Emulator {
         self.cpu.bus.io.set_button_state(button, state);
     }
 
+    /// Save the current emulator state to a file.
     pub fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let path = &self.state_file_path;
+        let path = &self.get_state_path();
         let state = self.cpu.clone();
 
         let file = File::create(path)?;
@@ -202,8 +214,9 @@ impl Emulator {
         Ok(())
     }
 
+    /// Load the emulator state from a file.
     pub fn load_state(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let path = &self.state_file_path;
+        let path = &self.get_state_path();
         let file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
         let reader = BufReader::new(file);
 
@@ -213,5 +226,47 @@ impl Emulator {
 
         println!("Loaded state from {}", path);
         Ok(())
+    }
+
+    pub fn save_sram(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let cart = &self.cpu.bus.cart;
+        if cart.has_battery() {
+            let path = &self.get_sram_path();
+            let sram = &cart.ram_data;
+
+            let file = File::create(path)?;
+            let mut writer = BufWriter::new(file);
+            writer.write_all(sram)?;
+
+            println!("Saved SRAM to {}", path);
+        }
+        Ok(())
+    }
+
+    pub fn load_sram(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.cpu.bus.cart.has_battery() {
+            let path = &self.get_sram_path();
+            let file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
+
+            let mut reader = BufReader::new(file);
+            reader.read_exact(&mut self.cpu.bus.cart.ram_data)?;
+
+            println!("Loaded SRAM from {}", path);
+        }
+        Ok(())
+    }
+
+    /// Get the save state file path based on the ROM path.
+    fn get_state_path(&self) -> String {
+        let mut path = self.rom_path.clone();
+        path.set_extension("sav");
+        path.to_string_lossy().to_string()
+    }
+
+    /// Get the SRAM file path based on the ROM path.
+    fn get_sram_path(&self) -> String {
+        let mut path = self.rom_path.clone();
+        path.set_extension("srm");
+        path.to_string_lossy().to_string()
     }
 }
