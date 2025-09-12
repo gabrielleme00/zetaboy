@@ -1,7 +1,8 @@
 mod cart;
 mod cpu;
-pub mod ppu;
+mod ppu;
 mod timer;
+mod apu;
 
 use crate::emulator::cpu::memory_bus::io_registers::{JoypadButton, REG_LCDC};
 use crate::PRINT_CART_INFO;

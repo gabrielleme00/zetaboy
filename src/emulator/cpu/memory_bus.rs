@@ -3,6 +3,7 @@ pub mod io_registers;
 
 use crate::emulator::cart::Cart;
 use crate::emulator::ppu::*;
+use crate::emulator::apu::Apu;
 use crate::emulator::timer::Timer;
 use crate::utils::bits::BIT_7;
 use dma::Dma;
@@ -16,6 +17,7 @@ const WRAM_SIZE: usize = 0x8000;
 pub struct MemoryBus {
     pub cart: Cart,
     pub ppu: PPU,
+    pub apu: Apu,
     pub timer: Timer,
     #[serde(with = "serde_arrays")]
     hram: [u8; HRAM_SIZE],
@@ -31,6 +33,7 @@ impl MemoryBus {
         Self {
             cart,
             ppu: PPU::new(),
+            apu: Apu::new(),
             timer: Timer::new(),
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
@@ -181,7 +184,7 @@ impl MemoryBus {
         self.timer.tick(&mut self.io);
         // TODO: Serial tick
         self.ppu.tick(&mut self.io);
-        // TODO: APU tick
+        self.apu.tick(&mut self.io);
     }
 
     pub fn dma_tick(&mut self) {
