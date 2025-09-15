@@ -1,11 +1,13 @@
 mod mbc0;
 mod mbc1;
+mod mbc2;
 mod mbc3;
 
-use serde::{Deserialize, Serialize};
 use mbc0::Mbc0;
 use mbc1::Mbc1;
+use mbc2::Mbc2;
 use mbc3::Mbc3;
+use serde::{Deserialize, Serialize};
 
 trait Mbc {
     fn read_rom(&self, rom_data: &[u8], address: u16) -> u8;
@@ -18,7 +20,7 @@ trait Mbc {
 pub enum MbcType {
     Mbc0(Mbc0),
     Mbc1(Mbc1),
-    // Mbc2,
+    Mbc2(Mbc2),
     Mbc3(Mbc3),
     // Mbc5,
     // Mbc6,
@@ -30,11 +32,10 @@ impl MbcType {
         match byte {
             0x00 => MbcType::Mbc0(Mbc0 {}),
             0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(rom_banks)),
-            // 0x05 | 0x06 => MbcType::Mbc2,
+            0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(rom_banks)),
             0x0F | 0x10 | 0x11 | 0x12 | 0x13 => {
-                let rtc_enabled = matches!(byte, 0x0F | 0x10);
-                MbcType::Mbc3(Mbc3::new(rom_banks, ram_banks, rtc_enabled))
-            },
+                MbcType::Mbc3(Mbc3::new(rom_banks, ram_banks, Self::has_timer(byte)))
+            }
             // 0x19 | 0x1A | 0x1B => MbcType::Mbc5,
             // 0x20 => MbcType::Mbc6,
             // 0x22 => MbcType::Mbc7,
@@ -46,6 +47,7 @@ impl MbcType {
         match self {
             MbcType::Mbc0(mbc) => mbc.read_rom(rom_data, address),
             MbcType::Mbc1(mbc) => mbc.read_rom(rom_data, address),
+            MbcType::Mbc2(mbc) => mbc.read_rom(rom_data, address),
             MbcType::Mbc3(mbc) => mbc.read_rom(rom_data, address),
         }
     }
@@ -54,6 +56,7 @@ impl MbcType {
         match self {
             MbcType::Mbc0(mbc) => mbc.write_rom(address, value),
             MbcType::Mbc1(mbc) => mbc.write_rom(address, value),
+            MbcType::Mbc2(mbc) => mbc.write_rom(address, value),
             MbcType::Mbc3(mbc) => mbc.write_rom(address, value),
         }
     }
@@ -62,6 +65,7 @@ impl MbcType {
         match self {
             MbcType::Mbc0(mbc) => mbc.read_ram(ram_data, address),
             MbcType::Mbc1(mbc) => mbc.read_ram(ram_data, address),
+            MbcType::Mbc2(mbc) => mbc.read_ram(ram_data, address),
             MbcType::Mbc3(mbc) => mbc.read_ram(ram_data, address),
         }
     }
@@ -70,6 +74,7 @@ impl MbcType {
         match self {
             MbcType::Mbc0(mbc) => mbc.write_ram(ram_data, address, value),
             MbcType::Mbc1(mbc) => mbc.write_ram(ram_data, address, value),
+            MbcType::Mbc2(mbc) => mbc.write_ram(ram_data, address, value),
             MbcType::Mbc3(mbc) => mbc.write_ram(ram_data, address, value),
         }
     }
@@ -120,5 +125,9 @@ impl MbcType {
             code,
             0x03 | 0x06 | 0x09 | 0x0D | 0x0F | 0x10 | 0x13 | 0x1B | 0x1E | 0x22
         )
+    }
+
+    pub fn has_timer(code: u8) -> bool {
+        matches!(code, 0x0F | 0x10)
     }
 }
