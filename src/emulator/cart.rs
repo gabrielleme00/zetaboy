@@ -1,22 +1,16 @@
-mod mbc_type;
+mod mbc;
 mod licensee;
 
-use core::panic;
 use std::{error::Error, fs, path::Path};
-use mbc_type::MBCType;
+use mbc::MbcType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Cart {
     pub rom_data: Vec<u8>,
     header: Header,
-    rom_bank: usize,
-    ram_bank: usize,
-    ram_enabled: bool,
     pub ram_data: Vec<u8>,
-    mbc_type: MBCType,
-    mbc1_mode: u8, // 0 = ROM banking mode, 1 = RAM banking mode
-    rom_banks_number: usize,
+    mbc_type: MbcType,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -71,6 +65,21 @@ impl Header {
             }
         }
     }
+
+    fn get_ram_banks_number(&self) -> usize {
+        match self.ram_size {
+            0 => 0,
+            1 => 0, // 2 kB (unused)
+            2 => 1, // 8 kB
+            3 => 4, // 32 kB
+            4 => 16, // 128 kB
+            5 => 8, // 64 kB
+            _ => {
+                println!("Unknown RAM size code: {:#04X}", self.ram_size);
+                0
+            }
+        }
+    }
 }
 
 impl Cart {
@@ -79,24 +88,22 @@ impl Cart {
         let header = Header::new(&rom_data);
 
         let ram_size = header.get_ram_size_in_bytes();
-        let rom_banks_number = header.get_rom_banks_number();
-        let mbc_type = MBCType::from_byte(header.cart_type);
+        let rom_banks = header.get_rom_banks_number();
+        let ram_banks = header.get_ram_banks_number();
+        let mbc_type = MbcType::from_byte(header.cart_type, rom_banks, ram_banks);
+
+         // Load RTC data if applicable
 
         Ok(Self {
             rom_data,
             header,
-            rom_bank: 1, // Start at bank 1 (bank 0 is fixed)
-            ram_bank: 0,
-            ram_enabled: false,
             ram_data: vec![0; ram_size],
             mbc_type,
-            mbc1_mode: 0,
-            rom_banks_number,
         })
     }
 
     pub fn has_battery(&self) -> bool {
-        MBCType::has_battery(self.header.cart_type)
+        MbcType::has_battery(self.header.cart_type)
     }
 
     pub fn print_info(&self) {
@@ -122,171 +129,22 @@ impl Cart {
 
     /// Read from ROM area (0x0000-0x7FFF)
     pub fn read_rom(&self, address: u16) -> u8 {
-        match self.mbc_type {
-            MBCType::None => self.read_rom_nombc(address),
-            MBCType::MBC1 => self.read_rom_mbc1(address),
-            _ => unimplemented!("MBC type {:?} not implemented", self.mbc_type),
-        }
-    }
-
-    fn read_rom_nombc(&self, address: u16) -> u8 {
-        let address = address as usize;
-        if address < self.rom_data.len() {
-            self.rom_data[address]
-        } else {
-            0xFF
-        }
-    }
-
-    fn read_rom_mbc1(&self, address: u16) -> u8 {
-        let address = address as usize;
-        match address {
-            0x0000..=0x3FFF => {
-                let bank = if self.mbc1_mode == 0 {
-                    0
-                } else {
-                    self.rom_bank & 0x60
-                };
-                let real_address = bank * 0x4000 + address;
-                if real_address < self.rom_data.len() {
-                    self.rom_data[real_address]
-                } else {
-                    0xFF
-                }
-            }
-            0x4000..=0x7FFF => {
-                let max_banks = self.rom_data.len() / 0x4000;
-                let bank = self.rom_bank % max_banks.max(1);
-                let real_address = bank * 0x4000 + (address - 0x4000);
-                if real_address < self.rom_data.len() {
-                    self.rom_data[real_address]
-                } else {
-                    0xFF
-                }
-            }
-            _ => 0xFF,
-        }
+        self.mbc_type.read_rom(&self.rom_data, address)
     }
 
     /// Write to ROM area (triggers MBC operations)
     pub fn write_rom(&mut self, address: u16, value: u8) {
-        match self.mbc_type {
-            MBCType::None => self.handle_nombc_write(address, value),
-            MBCType::MBC1 => self.handle_mbc1_write(address, value),
-            _ => unimplemented!("MBC type {:?} not implemented", self.mbc_type),
-        }
-    }
-
-    fn handle_nombc_write(&mut self, address: u16, value: u8) {
-        match address {
-            0x0000..=0x1FFF => {
-                // RAM Enable
-                self.ram_enabled = (value & 0x0F) == 0x0A;
-            }
-            0x2000..=0x3FFF => {
-                // ROM Bank Number (lower 5 bits)
-                let bank = (value & 0x1F) as usize;
-                // Bank 0 is treated as bank 1
-                self.rom_bank = if bank == 0 { 1 } else { bank };
-            }
-            0x4000..=0x5FFF => {
-                // RAM Bank Number or upper ROM bank bits
-                self.ram_bank = (value & 0x03) as usize;
-            }
-            0x6000..=0x7FFF => {
-                // Banking Mode Select (for advanced MBCs)
-                // For now, we'll ignore this
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_mbc1_write(&mut self, address: u16, value: u8) {
-        match address {
-            0x0000..=0x1FFF => self.ram_enabled = (value & 0x0F) == 0x0A,
-            0x2000..=0x3FFF => {
-                let bitmask = match self.rom_banks_number {
-                    128 => 0b00011111,
-                    064 => 0b00011111,
-                    032 => 0b00011111,
-                    016 => 0b00001111,
-                    008 => 0b00000111,
-                    004 => 0b00000011,
-                    002 => 0b00000001,
-                    _ => panic!("Unsupported number of ROM banks: {}", self.rom_banks_number),
-                };
-                let value = (value & 0x1F) as usize;
-                self.rom_bank =
-                    (self.rom_bank & 0x60) | if value == 0 { 1 } else { value & bitmask };
-            }
-            0x4000..=0x5FFF => {
-                let value = (value & 0x03) as usize;
-                self.rom_bank = if self.mbc1_mode == 0 {
-                    // ROM banking mode
-                    (self.rom_bank & 0x1F) | (value << 5)
-                } else {
-                    // RAM banking mode
-                    value
-                };
-            }
-            0x6000..=0x7FFF => {
-                // Banking mode select
-                self.mbc1_mode = value & 0x01;
-                if self.mbc1_mode == 0 {
-                    self.ram_bank = 0; // In ROM mode, RAM bank is always 0
-                }
-            }
-            0xA000..=0xBFFF => {
-                if self.ram_enabled {
-                    self.write_ram(address, value);
-                }
-            }
-            _ => {}
-        }
+        self.mbc_type.write_rom(address, value);
     }
 
     /// Read from RAM area (0xA000-0xBFFF)
     pub fn read_ram(&self, address: u16) -> u8 {
-        if !self.ram_enabled || self.ram_data.is_empty() {
-            return 0xFF;
-        }
-
-        let address = (address - 0xA000) as usize;
-        let bank = if self.mbc_type == MBCType::MBC1 && self.mbc1_mode == 1 {
-            self.ram_bank
-        } else {
-            0
-        };
-
-        let bank_offset = 0x2000 * bank;
-        let real_address = bank_offset + address;
-
-        if real_address < self.ram_data.len() {
-            self.ram_data[real_address]
-        } else {
-            0xFF
-        }
+        self.mbc_type.read_ram(&self.ram_data, address)
     }
 
     /// Write to RAM area (0xA000-0xBFFF)
     pub fn write_ram(&mut self, address: u16, value: u8) {
-        if !self.ram_enabled || self.ram_data.is_empty() {
-            return;
-        }
-
-        let address = (address - 0xA000) as usize;
-        let bank = if self.mbc_type == MBCType::MBC1 && self.mbc1_mode == 1 {
-            self.ram_bank
-        } else {
-            0
-        };
-
-        let bank_offset = 0x2000 * bank;
-        let real_address = bank_offset + address;
-
-        if real_address < self.ram_data.len() {
-            self.ram_data[real_address] = value;
-        }
+        self.mbc_type.write_ram(&mut self.ram_data, address, value);
     }
 
     fn is_checksum_valid(&self) -> bool {
@@ -332,7 +190,7 @@ impl Header {
     }
 
     fn cart_type_to_string(&self) -> &'static str {
-        MBCType::name(self.cart_type)
+        MbcType::name(self.cart_type)
     }
 
     fn rom_size_to_string(&self) -> String {
