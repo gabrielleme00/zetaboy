@@ -1,10 +1,12 @@
+mod apu;
 mod cart;
 mod cpu;
 pub mod ppu;
 mod timer;
 
-use crate::emulator::cpu::memory_bus::io_registers::{JoypadButton, REG_LCDC};
-use crate::PRINT_CART_INFO;
+use crate::audio::AudioSampleSender;
+use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
+use crate::{CPU_FREQUENCY, PRINT_CART_INFO};
 use cart::Cart;
 use cpu::CPU;
 use minifb::{Key, Window, WindowOptions};
@@ -48,7 +50,6 @@ pub struct Emulator {
     paused: bool,
     running: bool,
     cpu: CPU,
-    prev_vblank: bool,
     input_config: InputConfig,
     can_change_state: bool,
     rom_path: PathBuf,
@@ -79,7 +80,6 @@ impl Emulator {
             paused: false,
             running: true,
             cpu: CPU::new(cart),
-            prev_vblank: false,
             input_config: InputConfig::new(),
             can_change_state: true,
             rom_path: PathBuf::from(filename),
@@ -92,50 +92,62 @@ impl Emulator {
         Ok(emulator)
     }
 
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn run_with_audio(
+        &mut self,
+        mut audio_sender: AudioSampleSender,
+    ) -> Result<(), Box<dyn Error>> {
         self.cpu.print_state();
+
+        const TIME_STEP: Duration = Duration::from_micros(1_000); // 1ms
+        const CYCLES_PER_STEP: u64 = CPU_FREQUENCY as u64 / 1000; // ~4194 cycles per ms
+
+        let mut next_frame = Instant::now();
+        let mut next_step = Instant::now();
+
         while self.running && self.window.is_open() {
-            let frame_start = Instant::now();
+            let now = Instant::now();
 
+            // Handle input and pause
             self.handle_input();
-
             if self.window.is_key_down(Key::Escape) || !self.running {
                 self.running = false;
                 break;
             }
-
             if self.paused {
                 std::thread::sleep(Duration::from_millis(16));
                 continue;
             }
 
-            // Run CPU until VBlank (rising edge)
-            let mut rendered = false;
-            while !rendered {
-                self.cpu.step();
-
-                // Check for VBlank rising edge
-                let lcd_enabled = self.cpu.bus.io.read(REG_LCDC) & 0x80 != 0;
-                let vblank = self.cpu.bus.ppu.is_vblank();
-                let should_render = lcd_enabled && vblank && !self.prev_vblank;
-                self.prev_vblank = vblank;
-
-                if should_render {
-                    self.render();
-                    rendered = true;
+            // Emulate in fixed time steps
+            while next_step <= now {
+                let mut cycles_this_step = 0u64;
+                while cycles_this_step < CYCLES_PER_STEP {
+                    let t_cycles_taken = self.cpu.step();
+                    cycles_this_step += t_cycles_taken as u64;
+                    // Process audio for these cycles
+                    audio_sender
+                        .process_cpu_cycles(t_cycles_taken as u32, || self.get_apu_sample());
                 }
+                next_step += TIME_STEP;
             }
 
-            // Maintain consistent frame rate
-            let frame_time = frame_start.elapsed();
-            if frame_time < FRAME_DURATION {
-                std::thread::sleep(FRAME_DURATION - frame_time);
+            // Render at 60Hz
+            if next_frame <= now {
+                self.render();
+                next_frame += FRAME_DURATION;
             }
+
+            // Sleep a bit to avoid busy-waiting
+            std::thread::sleep(Duration::from_micros(100));
         }
         if let Err(e) = self.save_sram() {
             eprintln!("Failed to save SRAM: {}", e);
         }
         Ok(())
+    }
+
+    fn get_apu_sample(&self) -> (f32, f32) {
+        self.cpu.bus.apu.sample_stereo()
     }
 
     fn render(&mut self) {

@@ -1,6 +1,7 @@
 mod dma;
 pub mod io_registers;
 
+use crate::emulator::apu::Apu;
 use crate::emulator::cart::Cart;
 use crate::emulator::ppu::*;
 use crate::emulator::timer::Timer;
@@ -16,6 +17,7 @@ const WRAM_SIZE: usize = 0x8000;
 pub struct MemoryBus {
     pub cart: Cart,
     pub ppu: PPU,
+    pub apu: Apu,
     pub timer: Timer,
     #[serde(with = "serde_arrays")]
     hram: [u8; HRAM_SIZE],
@@ -31,6 +33,7 @@ impl MemoryBus {
         Self {
             cart,
             ppu: PPU::new(),
+            apu: Apu::new(),
             timer: Timer::new(),
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
@@ -75,6 +78,7 @@ impl MemoryBus {
             0xFEA0..=0xFEFF => 0x00,
             0xFF00..=0xFF7F => match address {
                 0xFF04..=0xFF07 => self.timer.read(address),
+                0xFF10..=0xFF3F => self.apu.read(address),
                 // 0xFF44 => 0x90, // Only return 0x90 for logging purposes
                 // 0xFF68..=0xFF69 => self.ppu.read_bg_palette_ram(address), // CGB
                 // 0xFF6A..=0xFF6B => self.ppu.read_obj_palette_ram(address), // CGB
@@ -124,6 +128,7 @@ impl MemoryBus {
             0xFEA0..=0xFEFF => {} // Unused OAM area
             0xFF00..=0xFF7F => match address {
                 0xFF04..=0xFF07 => self.timer.write(address, value, &mut self.io),
+                0xFF10..=0xFF3F => self.apu.write(address, value),
                 0xFF40 => {
                     let lcdc = self.io.read(address);
                     let lcd_was_on = lcdc & BIT_7 != 0;
@@ -181,7 +186,7 @@ impl MemoryBus {
         self.timer.tick(&mut self.io);
         // TODO: Serial tick
         self.ppu.tick(&mut self.io);
-        // TODO: APU tick
+        self.apu.tick();
     }
 
     pub fn dma_tick(&mut self) {

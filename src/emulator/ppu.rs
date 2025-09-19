@@ -48,10 +48,6 @@ impl PPU {
         }
     }
 
-    pub fn is_vblank(&self) -> bool {
-        self.mode == PPUMode::VBlank
-    }
-
     pub fn read_vram(&self, address: u16) -> u8 {
         if self.mode == PPUMode::PixelTransfer {
             return 0xFF;

@@ -27,6 +27,7 @@ pub struct CPU {
     pub bus: MemoryBus,
     pub mode: CpuMode,
     pub ime: bool,
+    total_cycles: u64,
 }
 
 impl CPU {
@@ -36,13 +37,15 @@ impl CPU {
             bus: MemoryBus::new(cart),
             ime: false,
             mode: CpuMode::Normal,
+            total_cycles: 0,
         }
     }
 
     /// Emulates a CPU step. Returns the number of cycles taken.
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> u64 {
         use CpuMode::*;
 
+        let cycles_before = self.total_cycles;
         let mut pending: u8 = 0;
 
         // Handle delayed EI: enable interrupts after the instruction following EI
@@ -74,7 +77,7 @@ impl CPU {
                     self.mode = Normal;
                 } else {
                     // If no interrupts are pending, just return
-                    return;
+                    return self.total_cycles - cycles_before;
                 }
             }
             EnableIME => {
@@ -95,6 +98,7 @@ impl CPU {
         }
 
         self.print_state();
+        self.total_cycles - cycles_before
     }
 
     fn read_instr(&mut self) -> Instruction {
@@ -117,6 +121,7 @@ impl CPU {
         for _ in 0..4 {
             self.bus.tick();
         }
+        self.total_cycles += 4;
     }
 
     pub fn print_state(&self) {
