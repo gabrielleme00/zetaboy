@@ -123,10 +123,6 @@ impl Cart {
         println!("#----------------------#");
     }
 
-    pub fn get_title(&self) -> String {
-        self.header.title_to_string()
-    }
-
     /// Read from ROM area (0x0000-0x7FFF)
     pub fn read_rom(&self, address: u16) -> u8 {
         self.mbc_type.read_rom(&self.rom_data, address)

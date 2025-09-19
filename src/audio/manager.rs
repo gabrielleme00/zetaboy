@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::AudioOutput;
-use crate::CPU_FREQUENCY;
+use crate::emulator::CPU_FREQUENCY;
 
 pub struct AudioManager {
     _output: AudioOutput,

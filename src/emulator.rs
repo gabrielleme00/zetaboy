@@ -1,58 +1,86 @@
-mod apu;
-mod cart;
-mod cpu;
+pub mod apu;
+pub mod cart;
+pub mod cpu;
 pub mod ppu;
-mod timer;
+pub mod timer;
 
-use crate::audio::AudioSampleSender;
-use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
-use crate::{CPU_FREQUENCY, PRINT_CART_INFO};
-use cart::Cart;
-use cpu::CPU;
-use minifb::{Key, Window, WindowOptions};
-use ppu::{HEIGHT, WIDTH};
+use winit::keyboard::KeyCode;
+
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 
-const FRAME_DURATION: Duration = Duration::from_nanos(1_000_000_000 / 60); // 16.67ms per frame
+use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
+use crate::{PRINT_CART_INFO};
+use cart::Cart;
+use cpu::CPU;
 
-struct InputConfig {
-    right: Key,
-    left: Key,
-    up: Key,
-    down: Key,
-    a: Key,
-    b: Key,
-    select: Key,
-    start: Key,
+pub const CPU_FREQUENCY: u32 = 4194304;
+
+pub struct InputConfig {
+    right: KeyCode,
+    left: KeyCode,
+    up: KeyCode,
+    down: KeyCode,
+    a: KeyCode,
+    b: KeyCode,
+    select: KeyCode,
+    start: KeyCode,
 }
 
 impl InputConfig {
     fn new() -> Self {
         Self {
-            right: Key::Right,
-            left: Key::Left,
-            up: Key::Up,
-            down: Key::Down,
-            a: Key::S,
-            b: Key::A,
-            select: Key::Space,
-            start: Key::Enter,
+            right: KeyCode::ArrowRight,
+            left: KeyCode::ArrowLeft,
+            up: KeyCode::ArrowUp,
+            down: KeyCode::ArrowDown,
+            a: KeyCode::KeyS,
+            b: KeyCode::KeyA,
+            select: KeyCode::Space,
+            start: KeyCode::Enter,
+        }
+    }
+}
+
+pub struct InputState {
+    keys_pressed: HashSet<KeyCode>,
+    can_change_state: bool,
+}
+
+impl InputState {
+    fn new() -> Self {
+        Self {
+            keys_pressed: HashSet::new(),
+            can_change_state: true,
+        }
+    }
+
+    fn is_key_down(&self, key: KeyCode) -> bool {
+        self.keys_pressed.contains(&key)
+    }
+
+    pub fn set_key_state(&mut self, key: KeyCode, pressed: bool) {
+        if pressed {
+            self.keys_pressed.insert(key);
+        } else {
+            self.keys_pressed.remove(&key);
         }
     }
 }
 
 pub struct Emulator {
-    window: Window,
-    paused: bool,
-    running: bool,
-    cpu: CPU,
-    input_config: InputConfig,
-    can_change_state: bool,
-    rom_path: PathBuf,
+    pub paused: bool,
+    pub running: bool,
+    pub cpu: CPU,
+    pub input_config: InputConfig,
+    pub input_state: InputState,
+    pub rom_path: PathBuf,
+    pub next_frame: Instant,
+    pub next_step: Instant,
 }
 
 impl Emulator {
@@ -63,26 +91,15 @@ impl Emulator {
             cart.print_info();
         }
 
-        let name = format!("ZetaBoy - {}", cart.get_title());
-        let (width, height) = (WIDTH, HEIGHT);
-        let options = WindowOptions {
-            resize: true,
-            scale: minifb::Scale::X4,
-            scale_mode: minifb::ScaleMode::AspectRatioStretch,
-            ..WindowOptions::default()
-        };
-        let window: Window = Window::new(&name, width, height, options).unwrap_or_else(|e| {
-            panic!("Error building window: {}", e);
-        });
-
         let mut emulator = Self {
-            window,
             paused: false,
             running: true,
             cpu: CPU::new(cart),
             input_config: InputConfig::new(),
-            can_change_state: true,
+            input_state: InputState::new(),
             rom_path: PathBuf::from(filename),
+            next_frame: Instant::now(),
+            next_step: Instant::now(),
         };
 
         if let Err(e) = emulator.load_sram() {
@@ -92,107 +109,42 @@ impl Emulator {
         Ok(emulator)
     }
 
-    pub fn run_with_audio(
-        &mut self,
-        mut audio_sender: AudioSampleSender,
-    ) -> Result<(), Box<dyn Error>> {
-        self.cpu.print_state();
-
-        const TIME_STEP: Duration = Duration::from_micros(1_000); // 1ms
-        const CYCLES_PER_STEP: u64 = CPU_FREQUENCY as u64 / 1000; // ~4194 cycles per ms
-
-        let mut next_frame = Instant::now();
-        let mut next_step = Instant::now();
-
-        while self.running && self.window.is_open() {
-            let now = Instant::now();
-
-            // Handle input and pause
-            self.handle_input();
-            if self.window.is_key_down(Key::Escape) || !self.running {
-                self.running = false;
-                break;
-            }
-            if self.paused {
-                std::thread::sleep(Duration::from_millis(16));
-                continue;
-            }
-
-            // Emulate in fixed time steps
-            while next_step <= now {
-                let mut cycles_this_step = 0u64;
-                while cycles_this_step < CYCLES_PER_STEP {
-                    let t_cycles_taken = self.cpu.step();
-                    cycles_this_step += t_cycles_taken as u64;
-                    // Process audio for these cycles
-                    audio_sender
-                        .process_cpu_cycles(t_cycles_taken as u32, || self.get_apu_sample());
-                }
-                next_step += TIME_STEP;
-            }
-
-            // Render at 60Hz
-            if next_frame <= now {
-                self.render();
-                next_frame += FRAME_DURATION;
-            }
-
-            // Sleep a bit to avoid busy-waiting
-            std::thread::sleep(Duration::from_micros(100));
-        }
-        if let Err(e) = self.save_sram() {
-            eprintln!("Failed to save SRAM: {}", e);
-        }
-        Ok(())
-    }
-
-    fn get_apu_sample(&mut self) -> (f32, f32) {
-        self.cpu.bus.apu.sample_stereo()
-    }
-
-    fn render(&mut self) {
-        // Render the current frame to the window
-        self.window
-            .update_with_buffer(&self.cpu.bus.ppu.buffer, WIDTH, HEIGHT)
-            .unwrap();
-    }
-
-    fn handle_input(&mut self) {
+    pub fn handle_input(&mut self) {
         use JoypadButton::*;
 
         // Gather emulator control input
-        let save = self.is_key_down(Key::F1);
-        let load = self.is_key_down(Key::F2);
+        let save = self.input_state.is_key_down(KeyCode::F1);
+        let load = self.input_state.is_key_down(KeyCode::F2);
 
         // Handle save/load state
-        if self.can_change_state {
+        if self.input_state.can_change_state {
             if save {
                 self.save_state().unwrap();
-                self.can_change_state = false;
+                self.input_state.can_change_state = false;
                 return;
             } else if load {
                 if let Err(e) = self.load_state() {
                     eprintln!("Failed to load state: {}", e);
                 }
-                self.can_change_state = false;
+                self.input_state.can_change_state = false;
                 return;
             }
         } else {
             if !save && !load {
-                self.can_change_state = true;
+                self.input_state.can_change_state = true;
                 return;
             }
         }
 
         // Gather GameBoy input
-        let right = self.is_key_down(self.input_config.right);
-        let left = self.is_key_down(self.input_config.left);
-        let up = self.is_key_down(self.input_config.up);
-        let down = self.is_key_down(self.input_config.down);
-        let a = self.is_key_down(self.input_config.a);
-        let b = self.is_key_down(self.input_config.b);
-        let select = self.is_key_down(self.input_config.select);
-        let start = self.is_key_down(self.input_config.start);
+        let right = self.input_state.is_key_down(self.input_config.right);
+        let left = self.input_state.is_key_down(self.input_config.left);
+        let up = self.input_state.is_key_down(self.input_config.up);
+        let down = self.input_state.is_key_down(self.input_config.down);
+        let a = self.input_state.is_key_down(self.input_config.a);
+        let b = self.input_state.is_key_down(self.input_config.b);
+        let select = self.input_state.is_key_down(self.input_config.select);
+        let start = self.input_state.is_key_down(self.input_config.start);
 
         // Apply state
         self.set_button_state(Right, right);
@@ -203,10 +155,6 @@ impl Emulator {
         self.set_button_state(B, b);
         self.set_button_state(Select, select);
         self.set_button_state(Start, start);
-    }
-
-    fn is_key_down(&self, key: Key) -> bool {
-        self.window.is_key_down(key)
     }
 
     fn set_button_state(&mut self, button: JoypadButton, state: bool) {
