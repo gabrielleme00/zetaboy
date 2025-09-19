@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+const MAX_LENGTH: u8 = 64;
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct LengthCounter {
     pub enabled: bool,
@@ -8,7 +10,7 @@ pub struct LengthCounter {
 
 impl LengthCounter {
     pub fn new() -> Self {
-        Self { enabled: false, counter: 64 }
+        Self { enabled: false, counter: MAX_LENGTH }
     }
 
     pub fn get(&self) -> u8 {
@@ -16,7 +18,7 @@ impl LengthCounter {
     }
 
     pub fn load(&mut self, length: u8) {
-        self.counter = 64 - length;
+        self.counter = MAX_LENGTH - length;
     }
 
     pub fn clock(&mut self, channel_enabled: &mut bool) {
@@ -31,9 +33,8 @@ impl LengthCounter {
     }
 
     pub fn trigger(&mut self) {
-        // Triggering resets the counter to max value if it has expired
         if self.counter == 0 {
-            self.counter = 64;
+            self.counter = MAX_LENGTH;
         }
     }
 }

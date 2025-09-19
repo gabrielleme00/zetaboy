@@ -71,11 +71,13 @@ impl Sweep {
     }
 
     fn calculate_new_frequency(&self) -> Option<u16> {
+        use SweepDirection::*;
+
         let offset = self.shadow_frequency >> self.configured_shift;
         
         let new_frequency = match self.configured_direction {
-            SweepDirection::Increase => self.shadow_frequency.wrapping_add(offset),
-            SweepDirection::Decrease => self.shadow_frequency.wrapping_sub(offset),
+            Increase => self.shadow_frequency.wrapping_add(offset),
+            Decrease => self.shadow_frequency.wrapping_sub(offset),
         };
         
         // Check for overflow (frequency > 2047)

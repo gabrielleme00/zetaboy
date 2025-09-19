@@ -1,5 +1,9 @@
 use super::*;
 
+const SAMPLE_COUNT: u8 = 32;
+const SAMPLES_PER_BYTE: u8 = 2;
+const WAVE_RAM_SIZE: u8 = SAMPLE_COUNT / SAMPLES_PER_BYTE;
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct WaveChannel {
     pub channel_enabled: bool,
@@ -17,7 +21,7 @@ impl WaveChannel {
         Self {
             channel_enabled: false,
             dac_enabled: false,
-            wave_ram: [0; 16],
+            wave_ram: [0; WAVE_RAM_SIZE as usize],
             sample_position: 0,
             timer: 0,
             timer_period: 0,
@@ -32,7 +36,7 @@ impl WaveChannel {
         } else {
             self.timer = self.timer_period;
             if self.channel_enabled && self.dac_enabled {
-                self.sample_position = (self.sample_position + 1) % 32;
+                self.sample_position = (self.sample_position + 1) % SAMPLE_COUNT;
             }
         }
     }
@@ -126,20 +130,14 @@ impl WaveChannel {
             self.trigger();
         }
         self.length_counter.enabled = (value & BIT_6) != 0;
-
-        // Build the 11-bit frequency value
         let frequency = (self.timer_period & 0x00FF) | (((value & 0x07) as u16) << 8);
-        
-        // Calculate actual timer period: (2048 - frequency) * 2
         self.timer_period = (2048 - frequency) * 2;
     }
 
-    // Wave RAM access methods
     pub fn read_wave_ram(&self, offset: u8) -> u8 {
         if offset < 16 {
             if self.channel_enabled {
-                // When channel is playing, return the currently accessed byte
-                self.wave_ram[(self.sample_position / 2) as usize]
+                self.wave_ram[self.current_sample_index()]
             } else {
                 self.wave_ram[offset as usize]
             }
@@ -149,13 +147,16 @@ impl WaveChannel {
     }
 
     pub fn write_wave_ram(&mut self, offset: u8, value: u8) {
-        if offset < 16 {
+        if offset < WAVE_RAM_SIZE as u8 {
             if self.channel_enabled {
-                // When channel is playing, write to the currently accessed byte
-                self.wave_ram[(self.sample_position / 2) as usize] = value;
+                self.wave_ram[self.current_sample_index()] = value;
             } else {
                 self.wave_ram[offset as usize] = value;
             }
         }
+    }
+
+    fn current_sample_index(&self) -> usize {
+        (self.sample_position / 2) as usize
     }
 }

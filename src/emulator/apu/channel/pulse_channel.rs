@@ -96,7 +96,6 @@ impl PulseChannel {
         }
     }
 
-    // Add sweep register methods for channel 1
     pub fn get_sweep_settings(&self) -> u8 {
         if let Some(ref sweep) = self.sweep {
             ((sweep.configured_period & 0x07) << 4)
@@ -106,7 +105,7 @@ impl PulseChannel {
                 } << 3)
                 | (sweep.configured_shift & 0x07)
         } else {
-            0xFF // Channel 2 doesn't have sweep
+            0xFF
         }
     }
 

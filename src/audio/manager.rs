@@ -47,7 +47,6 @@ pub struct AudioSampleSender {
     sender: SyncSender<(f32, f32)>,
     sample_accumulator: f32,
     ticks_per_sample: f32,
-    // For linear interpolation
     prev_sample: (f32, f32),
     current_sample: (f32, f32),
 }
@@ -65,7 +64,6 @@ impl AudioSampleSender {
 
     pub fn process_cpu_cycles(&mut self, t_cycles: u32, mut get_sample: impl FnMut() -> (f32, f32)) {
         for _ in 0..t_cycles {
-            // Update current sample every CPU cycle
             self.prev_sample = self.current_sample;
             self.current_sample = get_sample();
             
