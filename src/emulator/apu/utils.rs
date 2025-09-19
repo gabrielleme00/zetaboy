@@ -29,3 +29,14 @@ pub fn apply_volume_reduction(sample: f32, master_volume: u8) -> f32 {
 pub fn as_dac_output(dac_input: f32) -> f32 {
     (dac_input / 7.5) - 1.0
 }
+
+/// Simple first-order single-pole IIR low-pass filter
+/// y[n] = a * x[n] + (1 - a) * y[n-1]
+/// Where:
+/// - y[n] is the current output sample
+/// - x[n] is the current input sample
+/// - y[n-1] is the previous output sample
+/// - a is the smoothing factor (0 < a < 1)
+pub fn apply_low_pass_filter(sample: f32, previous_sample: f32, alpha: f32) -> f32 {
+    alpha * sample + (1.0 - alpha) * previous_sample
+}

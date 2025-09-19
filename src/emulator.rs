@@ -146,7 +146,7 @@ impl Emulator {
         Ok(())
     }
 
-    fn get_apu_sample(&self) -> (f32, f32) {
+    fn get_apu_sample(&mut self) -> (f32, f32) {
         self.cpu.bus.apu.sample_stereo()
     }
 

@@ -12,7 +12,10 @@ mod sweep;
 
 use channel::{NoiseChannel, PulseChannel, WaveChannel};
 use serde::{Deserialize, Serialize};
-use utils::{apply_volume_reduction, get_panned_output, mix_samples, panning_indexes::*};
+use utils::{
+    apply_low_pass_filter, apply_volume_reduction, get_panned_output, mix_samples,
+    panning_indexes::*,
+};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Apu {
@@ -25,6 +28,7 @@ pub struct Apu {
     channel_2: PulseChannel,
     channel_3: WaveChannel,
     channel_4: NoiseChannel,
+    last_sample: (f32, f32),
 }
 
 impl Apu {
@@ -39,19 +43,35 @@ impl Apu {
             channel_2: PulseChannel::new(),
             channel_3: WaveChannel::new(),
             channel_4: NoiseChannel::new(),
+            last_sample: (0.0, 0.0),
         }
     }
 
-    pub fn sample_stereo(&self) -> (f32, f32) {
-        let ch1 = self.channel_1.analog_output();
-        let ch2 = self.channel_2.analog_output();
-        let ch3 = self.channel_3.analog_output();
-        let ch4 = self.channel_4.analog_output();
+    pub fn sample_stereo(&mut self) -> (f32, f32) {
+        // Calculate the mixed output of all channels
+        let (left, right) = {
+            let ch1 = self.channel_1.analog_output();
+            let ch2 = self.channel_2.analog_output();
+            let ch3 = self.channel_3.analog_output();
+            let ch4 = self.channel_4.analog_output();
 
-        let left_sample = self.generate_left_sample(ch1, ch2, ch3, ch4);
-        let right_sample = self.generate_right_sample(ch1, ch2, ch3, ch4);
+            let left_sample = self.generate_left_sample(ch1, ch2, ch3, ch4);
+            let right_sample = self.generate_right_sample(ch1, ch2, ch3, ch4);
 
-        (left_sample, right_sample)
+            (left_sample, right_sample)
+        };
+
+        // Apply a simple low-pass filter to smooth the output
+        let cutoff_hz = 8000.0;
+        let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff_hz);
+        let dt = 1.0 / 44100.0;
+        let alpha = dt / (rc + dt);
+        self.last_sample = (
+            apply_low_pass_filter(left, self.last_sample.0, alpha),
+            apply_low_pass_filter(right, self.last_sample.1, alpha),
+        );
+
+        self.last_sample
     }
 
     fn generate_left_sample(

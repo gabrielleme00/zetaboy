@@ -12,6 +12,7 @@ pub struct WaveChannel {
     sample_position: u8,
     timer: u16,
     timer_period: u16,
+    frequency: u16,
     volume_shift: u8,
     length_counter: LengthCounter,
 }
@@ -25,6 +26,7 @@ impl WaveChannel {
             sample_position: 0,
             timer: 0,
             timer_period: 0,
+            frequency: 0,
             volume_shift: 0,
             length_counter: LengthCounter::new(),
         }
@@ -102,7 +104,7 @@ impl WaveChannel {
     }
 
     pub fn set_length_settings(&mut self, value: u8) {
-        self.length_counter.load(value);
+        self.length_counter.load(value & 0x3F);
     }
 
     pub fn get_volume_settings(&self) -> u8 {
@@ -114,7 +116,8 @@ impl WaveChannel {
     }
 
     pub fn set_period_low_settings(&mut self, value: u8) {
-        self.timer_period = (self.timer_period & 0xFF00) | (value as u16);
+        self.frequency = (self.frequency & 0xFF00) | (value as u16);
+        self.update_timer_period();
     }
 
     pub fn get_period_high_control_settings(&self) -> u8 {
@@ -122,7 +125,7 @@ impl WaveChannel {
             BIT_6
         } else {
             0
-        }) | ((self.timer_period >> 8) as u8 & 0x07)
+        }) | ((self.frequency >> 8) as u8 & 0x07)
     }
 
     pub fn set_period_high_control_settings(&mut self, value: u8) {
@@ -130,8 +133,8 @@ impl WaveChannel {
             self.trigger();
         }
         self.length_counter.enabled = (value & BIT_6) != 0;
-        let frequency = (self.timer_period & 0x00FF) | (((value & 0x07) as u16) << 8);
-        self.timer_period = (2048 - frequency) * 2;
+        self.frequency = (self.frequency & 0x00FF) | (((value & 0x07) as u16) << 8);
+        self.update_timer_period();
     }
 
     pub fn read_wave_ram(&self, offset: u8) -> u8 {
@@ -158,5 +161,9 @@ impl WaveChannel {
 
     fn current_sample_index(&self) -> usize {
         (self.sample_position / 2) as usize
+    }
+
+    fn update_timer_period(&mut self) {
+        self.timer_period = (2048 - self.frequency) * 2;
     }
 }
