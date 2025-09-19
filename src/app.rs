@@ -1,9 +1,9 @@
-use pixels::Pixels;
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
     event_loop::ActiveEventLoop,
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::PhysicalKey,
     window::{Window, WindowId},
 };
 
@@ -78,9 +78,9 @@ impl ApplicationHandler for App {
         let window = self.window.unwrap();
         let window_size = window.inner_size();
 
-        let surface_texture =
-            pixels::SurfaceTexture::new(window_size.width, window_size.height, window);
-        let pixels = pixels::PixelsBuilder::new(WIDTH as u32, HEIGHT as u32, surface_texture)
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
+        let pixels = PixelsBuilder::new(WIDTH as u32, HEIGHT as u32, surface_texture)
+            .enable_vsync(true)
             .build()
             .unwrap();
 
@@ -112,11 +112,6 @@ impl ApplicationHandler for App {
                 if let Some(emulator) = &mut self.emulator {
                     let pressed = state == ElementState::Pressed;
                     emulator.input_state.set_key_state(key_code, pressed);
-
-                    // Handle escape key
-                    if key_code == KeyCode::Escape && pressed {
-                        event_loop.exit();
-                    }
                 }
             }
             WindowEvent::RedrawRequested => {
