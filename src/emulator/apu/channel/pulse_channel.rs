@@ -2,8 +2,8 @@ use crate::utils::bits::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    as_dac_output, EnvelopeDirection, DutyCycle, Envelope, LengthCounter, PulsePhaseTimer, Sweep,
-    SweepDirection,
+    DutyCycle, Envelope, EnvelopeDirection, LengthCounter, PulsePhaseTimer, Sweep, SweepDirection,
+    as_dac_output,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -51,11 +51,6 @@ impl PulseChannel {
             if let Some(new_frequency) = sweep.clock() {
                 self.timer.set_frequency(new_frequency);
             }
-
-            // If sweep disabled the channel due to overflow
-            if !sweep.enabled {
-                self.channel_enabled = false;
-            }
         }
     }
 
@@ -68,14 +63,15 @@ impl PulseChannel {
     }
 
     fn digital_output(&self) -> f32 {
-        if self.channel_enabled {
+        if !self.channel_enabled || !self.dac_enabled {
             return 7.5;
         }
 
         let waveform_step = self.duty_cycle.waveform_step(self.timer.get_phase());
         let volume = self.envelope.volume;
 
-        (waveform_step * volume) as f32
+        let output = waveform_step * volume;
+        output as f32
     }
 
     pub fn analog_output(&self) -> f32 {
@@ -88,7 +84,11 @@ impl PulseChannel {
         }
 
         self.timer.trigger();
-        self.length_counter.trigger();
+
+        if self.length_counter.get() == 0 {
+            self.length_counter.trigger();
+        }
+
         self.envelope.trigger();
 
         if let Some(ref mut sweep) = self.sweep {
@@ -127,7 +127,14 @@ impl PulseChannel {
 
     pub fn set_length_settings(&mut self, value: u8) {
         self.duty_cycle = DutyCycle::from_bits(value >> 6);
-        self.length_counter.load(value & 0x3F);
+        let length_load = value & 0x3F;
+
+        // If length is 0, set it to maximum (64)
+        if length_load == 0 {
+            self.length_counter.load(64);
+        } else {
+            self.length_counter.load(length_load);
+        }
     }
 
     pub fn get_envelope_settings(&self) -> u8 {
@@ -147,10 +154,10 @@ impl PulseChannel {
             EnvelopeDirection::Decreasing
         };
         self.envelope.configured_period = value & 0x07;
+        self.dac_enabled = (value & 0xF8) != 0;
 
-        if (value & 0xF8) == 0 {
+        if !self.dac_enabled {
             self.channel_enabled = false;
-            self.dac_enabled = false;
         }
     }
 

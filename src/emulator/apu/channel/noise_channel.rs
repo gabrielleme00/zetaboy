@@ -64,7 +64,7 @@ impl NoiseChannel {
 
     fn digital_output(&self) -> f32 {
         if !self.channel_enabled || !self.dac_enabled {
-            return 0.0;
+            return 7.5;
         }
 
         // LFSR bit 0 inverted determines output
@@ -83,12 +83,21 @@ impl NoiseChannel {
 
         self.lfsr = LFSR_INITIAL;
         self.timer = self.timer_period;
-        self.length_counter.trigger();
+    
+        if self.length_counter.get() == 0 {
+            self.length_counter.trigger();
+        }
+        
         self.envelope.trigger();
     }
 
     pub fn set_length_settings(&mut self, value: u8) {
-        self.length_counter.load(value & 0x3F);
+        let length_load = value & 0x3F;
+        if length_load == 0 {
+            self.length_counter.load(64);
+        } else {
+            self.length_counter.load(length_load);
+        }
     }
 
     pub fn get_envelope_settings(&self) -> u8 {

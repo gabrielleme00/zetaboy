@@ -62,7 +62,7 @@ impl Apu {
         };
 
         // Apply a simple low-pass filter to smooth the output
-        let cutoff_hz = 8000.0;
+        let cutoff_hz = 2000.0;
         let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff_hz);
         let dt = 1.0 / 44100.0;
         let alpha = dt / (rc + dt);
@@ -183,23 +183,23 @@ impl Apu {
     }
 
     fn clock_frame_sequencer(&mut self) {
-        if self.frame_sequencer_step % 2 == 0 {
-            // Length counters are clocked on steps 0, 2, 4, 6
+        if matches!(self.frame_sequencer_step, 0 | 2 | 4 | 6) {
             self.channel_1.clock_length_counter();
             self.channel_2.clock_length_counter();
             self.channel_3.clock_length_counter();
             self.channel_4.clock_length_counter();
+        }
 
-            if matches!(self.frame_sequencer_step, 2 | 6) {
-                // Sweep is clocked on steps 0 and 4
-                self.channel_1.clock_sweep();
-            }
-        } else if self.frame_sequencer_step == 7 {
-            // Envelopes are clocked on step 7
+        if matches!(self.frame_sequencer_step, 2 | 6) {
+            self.channel_1.clock_sweep();
+        }
+
+        if matches!(self.frame_sequencer_step, 7) {
             self.channel_1.clock_envelope();
             self.channel_2.clock_envelope();
             self.channel_4.clock_envelope();
         }
+
         self.frame_sequencer_step = (self.frame_sequencer_step + 1) % 8;
     }
 

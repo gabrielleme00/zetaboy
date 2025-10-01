@@ -18,7 +18,8 @@ pub fn get_panned_output(sound_panning: u8, panning_bit_index: u8, output: f32) 
 }
 
 pub fn mix_samples(ch1: f32, ch2: f32, ch3: f32, ch4: f32) -> f32 {
-    (ch1 + ch2 + ch3 + ch4) / 4.0
+    let sum = ch1 + ch2 + ch3 + ch4;
+    (sum / 4.0).clamp(-1.0, 1.0)
 }
 
 pub fn apply_volume_reduction(sample: f32, master_volume: u8) -> f32 {

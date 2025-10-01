@@ -119,7 +119,7 @@ impl PPU {
                 // Window line counter only increments when window is actually rendered
                 // Don't increment on the first line where window becomes visible
                 if ly > wy {
-                    self.window_line = self.window_line.wrapping_add(1);
+                    self.window_line += 1;
                 }
             }
         }
@@ -227,9 +227,6 @@ impl PPU {
             0x9800
         };
 
-        // Calculate the effective line Y position
-        let line_y = ly.wrapping_add(scy);
-
         // Render window if enabled and ly >= wy and WX in range
         let window_enabled = lcdc_data.window_enable;
         let window_visible = ly >= wy && wx <= 166 && wy <= 143;
@@ -247,7 +244,7 @@ impl PPU {
             } else {
                 // Background coordinates
                 let x_coord = x.wrapping_add(scx as usize);
-                let y_coord = line_y as usize;
+                let y_coord = ly.wrapping_add(scy) as usize;
                 (bg_tile_map_addr, x_coord, y_coord)
             };
             let tile_map_x = (x_coord / 8) % 32;
