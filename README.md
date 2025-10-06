@@ -1,7 +1,22 @@
 # zetaboy
-Game Boy emulator in Rust.
+Gameboy emulator in Rust.
 
 ![alt text](screenshot_tetris.png)
+
+## Features
+
+- Audio
+  - All 4 channels emulation
+  - Basic low-pass filter to reduce aliasing
+- General
+  - Still DMG only (planning on GBC)
+  - Basic GUI
+  - Load ROMs using GUI
+  - Save/Load state (with hotkeys)
+  - Auto save/load external RAM for games that featured a battery (Like Pokémon)
+  - Outputs colors using a palette that closely matches the original LCD
+- Debugger
+  - CPU debugging window
 
 ## Accuracy Tests
 

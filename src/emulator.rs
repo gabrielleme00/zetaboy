@@ -18,7 +18,7 @@ use cpu::CPU;
 pub const CPU_FREQUENCY: u32 = 4194304;
 
 pub struct InputState {
-    // Game Boy buttons
+    // Gameboy buttons
     pub right: bool,
     pub left: bool,
     pub up: bool,

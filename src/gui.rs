@@ -90,7 +90,7 @@ impl EmulatorApp {
     fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
         if let Some(emulator) = &mut self.emulator {
             ctx.input(|i| {
-                // Game Boy controls
+                // Gameboy controls
                 emulator.input_state.a = i.key_down(egui::Key::S);
                 emulator.input_state.b = i.key_down(egui::Key::A);
                 emulator.input_state.up = i.key_down(egui::Key::ArrowUp);
