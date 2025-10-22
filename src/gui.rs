@@ -148,7 +148,7 @@ impl eframe::App for EmulatorApp {
                         self.paused = true;
 
                         let file = rfd::FileDialog::new()
-                            .add_filter("Gameboy ROM", &["gb"])
+                            .add_filter("Gameboy ROM", &["gb", "gbc"])
                             .set_directory("/")
                             .pick_file();
 
@@ -262,8 +262,7 @@ impl eframe::App for EmulatorApp {
                 });
             } else {
                 ui.centered_and_justified(|ui| {
-                    ui.spinner();
-                    ui.label("Loading emulator...");
+                    ui.label("No ROM loaded");
                 });
             }
         });

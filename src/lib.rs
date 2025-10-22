@@ -13,11 +13,11 @@ pub const PRINT_SERIAL: bool = false; // Print serial output
 pub const PRINT_STATE: bool = false; // Print CPU state after each instruction
 pub const PRINT_CART_INFO: bool = false; // Prints cartridge information
 
-pub fn run(rom_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn run(rom_path: Option<&str>) -> Result<(), Box<dyn Error>> {
     let (_audio_manager, audio_sender) = AudioManager::new()?;
 
-    let emulator = Emulator::new(rom_path)?;
-    let app = EmulatorApp::new(Some(emulator), Some(audio_sender));
+    let emulator = rom_path.map(|path| Emulator::new(path)).transpose()?;
+    let app = EmulatorApp::new(emulator, Some(audio_sender));
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
