@@ -2,11 +2,13 @@ mod mbc0;
 mod mbc1;
 mod mbc2;
 mod mbc3;
+mod mbc5;
 
 use mbc0::Mbc0;
 use mbc1::Mbc1;
 use mbc2::Mbc2;
 use mbc3::Mbc3;
+use mbc5::Mbc5;
 use serde::{Deserialize, Serialize};
 
 trait Mbc {
@@ -22,9 +24,7 @@ pub enum MbcType {
     Mbc1(Mbc1),
     Mbc2(Mbc2),
     Mbc3(Mbc3),
-    // Mbc5,
-    // Mbc6,
-    // Mbc7,
+    Mbc5(Mbc5),
 }
 
 impl MbcType {
@@ -36,9 +36,7 @@ impl MbcType {
             0x0F | 0x10 | 0x11 | 0x12 | 0x13 => {
                 MbcType::Mbc3(Mbc3::new(rom_banks, ram_banks, Self::has_timer(byte)))
             }
-            // 0x19 | 0x1A | 0x1B => MbcType::Mbc5,
-            // 0x20 => MbcType::Mbc6,
-            // 0x22 => MbcType::Mbc7,
+            0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => MbcType::Mbc5(Mbc5::new(rom_banks, ram_banks)),
             _ => panic!("Unsupported MBC type: {:#X} - {}", byte, Self::name(byte)),
         }
     }
@@ -49,6 +47,7 @@ impl MbcType {
             MbcType::Mbc1(mbc) => mbc.read_rom(rom_data, address),
             MbcType::Mbc2(mbc) => mbc.read_rom(rom_data, address),
             MbcType::Mbc3(mbc) => mbc.read_rom(rom_data, address),
+            MbcType::Mbc5(mbc) => mbc.read_rom(rom_data, address),
         }
     }
 
@@ -58,6 +57,7 @@ impl MbcType {
             MbcType::Mbc1(mbc) => mbc.write_rom(address, value),
             MbcType::Mbc2(mbc) => mbc.write_rom(address, value),
             MbcType::Mbc3(mbc) => mbc.write_rom(address, value),
+            MbcType::Mbc5(mbc) => mbc.write_rom(address, value),
         }
     }
 
@@ -67,6 +67,7 @@ impl MbcType {
             MbcType::Mbc1(mbc) => mbc.read_ram(ram_data, address),
             MbcType::Mbc2(mbc) => mbc.read_ram(ram_data, address),
             MbcType::Mbc3(mbc) => mbc.read_ram(ram_data, address),
+            MbcType::Mbc5(mbc) => mbc.read_ram(ram_data, address),
         }
     }
 
@@ -76,6 +77,7 @@ impl MbcType {
             MbcType::Mbc1(mbc) => mbc.write_ram(ram_data, address, value),
             MbcType::Mbc2(mbc) => mbc.write_ram(ram_data, address, value),
             MbcType::Mbc3(mbc) => mbc.write_ram(ram_data, address, value),
+            MbcType::Mbc5(mbc) => mbc.write_ram(ram_data, address, value),
         }
     }
 
