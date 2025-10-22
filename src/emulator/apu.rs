@@ -33,7 +33,7 @@ pub struct Apu {
 
 impl Apu {
     pub fn new() -> Self {
-        Self {
+        let mut apu = Self {
             enabled: false,
             frame_sequencer_step: 0,
             frame_sequencer_counter: 0,
@@ -44,7 +44,25 @@ impl Apu {
             channel_3: WaveChannel::new(),
             channel_4: NoiseChannel::new(),
             last_sample: (0.0, 0.0),
-        }
+        };
+        
+        apu.write(0xFF10, 0x80);
+        apu.write(0xFF11, 0xBF);
+        apu.write(0xFF12, 0xF3);
+        apu.write(0xFF14, 0xBF);
+        apu.write(0xFF16, 0x3F);
+        apu.write(0xFF19, 0xBF);
+        apu.write(0xFF1A, 0x7F);
+        apu.write(0xFF1B, 0xFF);
+        apu.write(0xFF1C, 0x9F);
+        apu.write(0xFF1E, 0xBF);
+        apu.write(0xFF20, 0xFF);
+        apu.write(0xFF23, 0xBF);
+        apu.write(0xFF24, 0x77);
+        apu.write(0xFF25, 0xF3);
+        apu.write(0xFF26, 0xF1);
+        
+        apu
     }
 
     pub fn sample_stereo(&mut self) -> (f32, f32) {
@@ -224,6 +242,18 @@ impl Apu {
     }
 
     fn set_master_control(&mut self, value: u8) {
+        let was_enabled = self.enabled;
         self.enabled = (value & BIT_7) != 0;
+        
+        if was_enabled && !self.enabled {
+            self.channel_1 = PulseChannel::new_with_sweep();
+            self.channel_2 = PulseChannel::new();
+            self.channel_3 = WaveChannel::new();
+            self.channel_4 = NoiseChannel::new();
+            self.master_volume = 0;
+            self.sound_panning = 0;
+            self.frame_sequencer_step = 0;
+            self.frame_sequencer_counter = 0;
+        }
     }
 }

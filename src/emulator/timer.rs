@@ -1,5 +1,5 @@
 use crate::{
-    emulator::cpu::memory_bus::io_registers::{IORegisters, InterruptBit},
+    emulator::cpu::memory_bus::InterruptBit,
     utils::bits::*,
 };
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ impl Timer {
     }
 
     /// Write to timer registers.
-    pub fn write(&mut self, addr: u16, value: u8, io: &mut IORegisters) {
+    pub fn write(&mut self, addr: u16, value: u8, interrupt_flag: &mut u8) {
         match addr {
             0xFF04 => self.div = 0,
             0xFF05 => {
@@ -75,7 +75,7 @@ impl Timer {
                 self.current_bit = 1 << BITS[(self.tac & 0b11) as usize];
                 self.timer_enabled = (self.tac & BIT_2) != 0;
 
-                self.tima_glitch(old_enabled, old_bit, io);
+                self.tima_glitch(old_enabled, old_bit, interrupt_flag);
             }
             _ => {}
         }
@@ -84,7 +84,7 @@ impl Timer {
     /// Steps the timer forward by the given number of T-cycles.
     ///
     /// Returns true if a timer interrupt should be triggered.
-    pub fn tick(&mut self, io_registers: &mut IORegisters) {
+    pub fn tick(&mut self, interrupt_flag: &mut u8) {
         self.div = self.div.wrapping_add(1);
 
         let bit = self.timer_enabled && (self.div & self.current_bit) != 0;
@@ -104,7 +104,7 @@ impl Timer {
             self.ticks_since_overflow = self.ticks_since_overflow.wrapping_add(1);
 
             if self.ticks_since_overflow == OVERFLOW_INTERRUPT_TICK {
-                io_registers.request_interrupt(InterruptBit::Timer);
+                *interrupt_flag |= InterruptBit::Timer as u8;
             } else if self.ticks_since_overflow == OVERFLOW_RELOAD_TICK {
                 self.tima = self.tma;
             } else if self.ticks_since_overflow == OVERFLOW_RESET_TICK {
@@ -114,7 +114,7 @@ impl Timer {
         }
     }
 
-    fn tima_glitch(&mut self, old_enabled: bool, old_bit: u16, io: &mut IORegisters) {
+    fn tima_glitch(&mut self, old_enabled: bool, old_bit: u16, interrupt_flag: &mut u8) {
         if !old_enabled {
             return;
         }
@@ -124,7 +124,7 @@ impl Timer {
                 self.tima = self.tima.wrapping_add(1);
                 if self.tima == 0 {
                     self.tima = self.tma;
-                    io.request_interrupt(InterruptBit::Timer);
+                    *interrupt_flag |= InterruptBit::Timer as u8;
                 }
                 self.last_bit = false;
             }

@@ -10,6 +10,7 @@ pub struct Dma {
     copied: u16,
     enabled: bool,
     delay: u8,
+    last_value: u8,
 }
 
 impl Dma {
@@ -19,6 +20,7 @@ impl Dma {
             copied: 0,
             enabled: false,
             delay: 0,
+            last_value: 0xFF,
         }
     }
 
@@ -26,7 +28,12 @@ impl Dma {
         self.enabled
     }
 
+    pub fn read(&self) -> u8 {
+        self.last_value
+    }
+
     pub fn start(&mut self, source: u8) {
+        self.last_value = source;
         self.source = (source as u16) << 8;
         self.copied = 0;
         self.enabled = true;

@@ -1,7 +1,9 @@
 pub mod apu;
 pub mod cart;
 pub mod cpu;
+pub mod joypad;
 pub mod ppu;
+pub mod serial;
 pub mod timer;
 
 use std::error::Error;
@@ -11,7 +13,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::PRINT_CART_INFO;
-use crate::emulator::cpu::memory_bus::io_registers::JoypadButton;
+use crate::emulator::joypad::JoypadButton;
 use cart::Cart;
 use cpu::CPU;
 
@@ -122,7 +124,7 @@ impl Emulator {
     }
 
     fn set_button_state(&mut self, button: JoypadButton, state: bool) {
-        self.cpu.bus.io.set_button_state(button, state);
+        self.cpu.bus.set_button_state(button, state);
     }
 
     /// Save the current emulator state to a file.

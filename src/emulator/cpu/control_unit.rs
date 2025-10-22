@@ -63,9 +63,15 @@ pub fn execute(cpu: &mut CPU, instruction: Instruction) {
 }
 
 /// Stops the CPU and enters a low-power mode.
+/// In CGB mode, if KEY1 bit 0 is set, performs a speed switch instead.
 fn stop(cpu: &mut CPU) {
-    cpu.mode = CpuMode::Stop;
     cpu.reg.pc = cpu.reg.pc.wrapping_add(1);
+    
+    if cpu.bus.is_speed_switch_prepared() {
+        cpu.bus.perform_speed_switch();
+    } else {
+        cpu.mode = CpuMode::Stop;
+    }
 }
 
 /// Halts the CPU until an interrupt occurs.

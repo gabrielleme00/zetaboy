@@ -4,7 +4,6 @@ pub mod memory_bus;
 mod registers;
 
 use crate::emulator::cart::Cart;
-use crate::emulator::cpu::memory_bus::io_registers::{REG_IE, REG_IF};
 use crate::PRINT_STATE;
 use instructions::*;
 use memory_bus::*;
@@ -33,7 +32,7 @@ pub struct CPU {
 impl CPU {
     pub fn new(cart: Cart) -> Self {
         Self {
-            reg: Registers::new(),
+            reg: Registers::new_with_mode(cart.is_cgb()),
             bus: MemoryBus::new(cart),
             ime: false,
             mode: CpuMode::Normal,
@@ -162,8 +161,8 @@ impl CPU {
                     self.write_byte(self.reg.sp, (self.reg.pc >> 8) as u8);
 
                     // If the interrupt is not enabled, cancel it's dispatch
-                    if self.reg.sp == REG_IE {
-                        if self.bus.read_byte(REG_IE) & mask == 0 {
+                    if self.reg.sp == 0xFFFF {
+                        if self.bus.read_byte(0xFFFF) & mask == 0 {
                             self.reg.pc = 0x0000;
                             continue;
                         }
@@ -174,8 +173,8 @@ impl CPU {
                     self.write_byte(self.reg.sp, (self.reg.pc & 0xFF) as u8);
 
                     // Clear the interrupt flag
-                    let int_f = self.bus.read_byte(REG_IF);
-                    self.bus.write_byte(REG_IF, int_f & !mask);
+                    let int_f = self.bus.read_byte(0xFF0F);
+                    self.bus.write_byte(0xFF0F, int_f & !mask);
 
                     // Jump to the interrupt vector
                     self.reg.pc = match i {

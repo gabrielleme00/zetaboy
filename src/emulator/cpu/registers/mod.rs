@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Registers {
-    pub a: u8, // Accumulator
+    pub a: u8,
     pub b: u8,
     pub c: u8,
     pub d: u8,
@@ -13,8 +13,8 @@ pub struct Registers {
     pub f: FlagsRegister,
     pub h: u8,
     pub l: u8,
-    pub pc: u16, // Program Counter
-    pub sp: u16, // Stack Pointer
+    pub pc: u16,
+    pub sp: u16,
 }
 
 impl std::fmt::Display for Registers {
@@ -28,19 +28,36 @@ impl std::fmt::Display for Registers {
 }
 
 impl Registers {
-    /// Creates a new `Registers` instance with DMG after-boot-ROM values.
-    pub fn new() -> Self {
-        Self {
-            a: 0x01,
-            b: 0x00,
-            c: 0x13,
-            d: 0x00,
-            e: 0xD8,
-            f: FlagsRegister::from(0xB0),
-            h: 0x01,
-            l: 0x4D,
-            pc: 0x0100,
-            sp: 0xFFFE,
+    /// Creates a new `Registers` instance with post-boot-ROM values for the specified mode.
+    /// 
+    /// `cgb_mode`: If true, initializes for CGB (Game Boy Color), otherwise DMG (original Game Boy)
+    pub fn new_with_mode(cgb_mode: bool) -> Self {
+        if cgb_mode {
+            Self {
+                a: 0x11,
+                b: 0x00,
+                c: 0x00,
+                d: 0xFF,
+                e: 0x56,
+                f: FlagsRegister::from(0x80),
+                h: 0x00,
+                l: 0x0D,
+                pc: 0x0100,
+                sp: 0xFFFE,
+            }
+        } else {
+            Self {
+                a: 0x01,
+                b: 0x00,
+                c: 0x13,
+                d: 0x00,
+                e: 0xD8,
+                f: FlagsRegister::from(0xB0),
+                h: 0x01,
+                l: 0x4D,
+                pc: 0x0100,
+                sp: 0xFFFE,
+            }
         }
     }
 

@@ -35,7 +35,9 @@ pub struct RenderSprite {
     pub screen_x: i16,
     pub screen_y: i16,
     pub tile_index: u8,
-    pub palette_index: bool, // false = OBP0, true = OBP1
+    pub palette_index: bool, // DMG: false = OBP0, true = OBP1
+    pub cgb_palette: u8,     // CGB: palette number (0-7)
+    pub cgb_vram_bank: u8,   // CGB: VRAM bank (0-1)
     pub x_flip: bool,
     pub y_flip: bool,
     pub bg_priority: bool, // true = behind BG colors 1-3
@@ -50,6 +52,8 @@ impl From<OAMSprite> for RenderSprite {
             screen_y: oam_sprite.y as i16 - SPRITE_OFFSET_Y as i16,
             tile_index: oam_sprite.tile_index,
             palette_index: (attr & BIT_4) != 0,
+            cgb_palette: attr & 0x07,        // CGB: bits 0-2
+            cgb_vram_bank: (attr & BIT_3) >> 3, // CGB: bit 3
             x_flip: (attr & BIT_5) != 0,
             y_flip: (attr & BIT_6) != 0,
             bg_priority: (attr & BIT_7) != 0,
@@ -72,14 +76,5 @@ impl RenderSprite {
         } else {
             ly as i16 - self.screen_y
         }) as u8
-    }
-
-    /// Returns the address of the sprite's palette.
-    pub fn get_obp_address(&self) -> u16 {
-        if self.palette_index {
-            0xFF49 // OBP1
-        } else {
-            0xFF48 // OBP0
-        }
     }
 }

@@ -27,6 +27,7 @@ struct Header {
     lic_code: u8,
     version: u8,
     checksum: u8,
+    cgb_flag: u8,
 }
 
 impl Header {
@@ -106,14 +107,31 @@ impl Cart {
         MbcType::has_battery(self.header.cart_type)
     }
 
+    pub fn is_cgb(&self) -> bool {
+        self.header.cgb_flag == 0x80 || self.header.cgb_flag == 0xC0
+    }
+
+    pub fn is_cgb_only(&self) -> bool {
+        self.header.cgb_flag == 0xC0
+    }
+
     pub fn print_info(&self) {
         let checksum = match self.is_checksum_valid() {
             true => format!("{:#04X} (PASSED)", self.header.checksum),
             false => format!("{:#04X} (FAILED)", self.header.checksum),
         };
 
+        let mode = if self.is_cgb_only() {
+            "CGB Only"
+        } else if self.is_cgb() {
+            "CGB Enhanced"
+        } else {
+            "DMG"
+        };
+
         println!("#------ ROM INFO ------#");
         println!("| Title    : {}", self.header.title_to_string());
+        println!("| Mode     : {}", mode);
         println!("| Type     : {}", self.header.cart_type_to_string());
         println!("| ROM Size : {}", self.header.rom_size_to_string());
         println!("| RAM Size : {}", self.header.ram_size_to_string());
@@ -163,10 +181,11 @@ impl Header {
             cart_type: rom[0x147],
             rom_size: rom[0x148],
             ram_size: rom[0x149],
-            _dest_code: rom[0x1A],
+            _dest_code: rom[0x14A],
             lic_code: rom[0x14B],
             version: rom[0x14C],
             checksum: rom[0x14D],
+            cgb_flag: rom[0x143],
         }
     }
 
