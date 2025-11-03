@@ -44,8 +44,8 @@ pub struct MemoryBus {
 }
 
 impl MemoryBus {
-    pub fn new(cart: Cart) -> Self {
-        let cgb_mode = cart.is_cgb();
+    pub fn new(cart: Cart, force_dmg: bool) -> Self {
+        let cgb_mode = cart.is_cgb() && !force_dmg;
         let mut ppu = PPU::new();
         ppu.set_cgb_mode(cgb_mode);
 

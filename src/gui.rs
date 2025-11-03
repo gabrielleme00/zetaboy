@@ -19,6 +19,7 @@ pub struct EmulatorApp {
     pub texture: Option<egui::TextureHandle>,
     pub show_debug: bool,
     pub paused: bool,
+    pub force_dmg: bool,
 }
 
 impl EmulatorApp {
@@ -29,6 +30,7 @@ impl EmulatorApp {
             texture: None,
             show_debug: false,
             paused: false,
+            force_dmg: false,
         }
     }
 
@@ -154,7 +156,7 @@ impl eframe::App for EmulatorApp {
 
                         if let Some(path) = file {
                             if let Some(path_str) = path.to_str() {
-                                self.emulator = Emulator::new(path_str).ok();
+                                self.emulator = Emulator::new(path_str, self.force_dmg).ok();
                             } else {
                                 eprintln!("Failed to convert path to string");
                             }
@@ -207,6 +209,19 @@ impl eframe::App for EmulatorApp {
                             // TODO: Implement reset
                         }
                         ui.close();
+                    }
+                    ui.separator();
+                    if ui.checkbox(&mut self.force_dmg, "Force Game Boy (DMG)").clicked() {
+                        // Reload emulator if one is loaded
+                        if let Some(emulator) = &self.emulator {
+                            let rom_path = emulator.rom_path.to_str().unwrap_or("").to_string();
+                            if !rom_path.is_empty() {
+                                self.emulator = Emulator::new(&rom_path, self.force_dmg).ok();
+                                if self.emulator.is_some() {
+                                    println!("Reloaded ROM with {} mode", if self.force_dmg { "DMG" } else { "Auto" });
+                                }
+                            }
+                        }
                     }
                 });
 

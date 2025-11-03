@@ -63,7 +63,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(filename: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(filename: &str, force_dmg: bool) -> Result<Self, Box<dyn Error>> {
         let cart = Cart::new(filename)?;
 
         if PRINT_CART_INFO {
@@ -72,7 +72,7 @@ impl Emulator {
 
         let mut emulator = Self {
             running: true,
-            cpu: CPU::new(cart),
+            cpu: CPU::new(cart, force_dmg),
             input_state: InputState::new(),
             rom_path: PathBuf::from(filename),
             next_step: Instant::now(),

@@ -30,10 +30,11 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn new(cart: Cart) -> Self {
+    pub fn new(cart: Cart, force_dmg: bool) -> Self {
+        let is_cgb = cart.is_cgb() && !force_dmg;
         Self {
-            reg: Registers::new_with_mode(cart.is_cgb()),
-            bus: MemoryBus::new(cart),
+            reg: Registers::new_with_mode(is_cgb),
+            bus: MemoryBus::new(cart, force_dmg),
             ime: false,
             mode: CpuMode::Normal,
             total_cycles: 0,
