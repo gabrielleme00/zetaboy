@@ -49,7 +49,7 @@ impl WaveChannel {
 
     fn digital_output(&self) -> f32 {
         if !self.channel_enabled || !self.dac_enabled {
-            return 0.0;
+            return 7.5;
         }
 
         // Get current 4-bit sample from wave RAM
