@@ -84,9 +84,10 @@ impl Timer {
     /// Steps the timer forward by the given number of T-cycles.
     ///
     /// Returns true if a timer interrupt should be triggered.
-    pub fn tick(&mut self, interrupt_flag: &mut u8) {
-        self.div = self.div.wrapping_add(1);
+    pub fn tick(&mut self) -> bool {
+        let mut interrupt = false;
 
+        self.div = self.div.wrapping_add(1);
         let bit = self.timer_enabled && (self.div & self.current_bit) != 0;
 
         // Detect falling-edge
@@ -104,7 +105,7 @@ impl Timer {
             self.ticks_since_overflow = self.ticks_since_overflow.wrapping_add(1);
 
             if self.ticks_since_overflow == OVERFLOW_INTERRUPT_TICK {
-                *interrupt_flag |= InterruptBit::Timer as u8;
+                interrupt = true;
             } else if self.ticks_since_overflow == OVERFLOW_RELOAD_TICK {
                 self.tima = self.tma;
             } else if self.ticks_since_overflow == OVERFLOW_RESET_TICK {
@@ -112,6 +113,8 @@ impl Timer {
                 self.ticks_since_overflow = 0;
             }
         }
+
+        interrupt
     }
 
     fn tima_glitch(&mut self, old_enabled: bool, old_bit: u16, interrupt_flag: &mut u8) {

@@ -79,8 +79,8 @@ fn halt(cpu: &mut CPU) {
     if cpu.ime {
         cpu.mode = CpuMode::Halt;
     } else {
-        let int_f = cpu.bus.get_interrupt_flags();
-        let int_e = cpu.bus.get_interrupt_enable();
+        let int_f = cpu.bus.read_byte(0xFF0F);
+        let int_e = cpu.bus.read_byte(0xFFFF);
         if int_f & int_e & 0x1F != 0 {
             cpu.mode = CpuMode::HaltBug;
         } else {

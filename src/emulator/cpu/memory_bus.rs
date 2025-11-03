@@ -19,7 +19,7 @@ pub enum InterruptBit {
     VBlank = 0x01,
     LCDStat = 0x02,
     Timer = 0x04,
-    // Serial = 0x08,
+    Serial = 0x08,
     Joypad = 0x10,
 }
 
@@ -55,7 +55,7 @@ impl MemoryBus {
             apu: Apu::new(),
             timer: Timer::new(),
             joypad: Joypad::new(),
-            serial: Serial::new(crate::PRINT_SERIAL),
+            serial: Serial::new(true),
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
             wram_bank: 1,
@@ -102,7 +102,7 @@ impl MemoryBus {
                 0xFF01 => self.serial.read_sb(),
                 0xFF02 => self.serial.read_sc(),
                 0xFF04..=0xFF07 => self.timer.read(address),
-                0xFF0F => self.interrupt_flag,
+                0xFF0F => self.interrupt_flag | 0xE0,
                 0xFF10..=0xFF3F => self.apu.read(address),
                 0xFF40..=0xFF45 => self.ppu.read_register(address),
                 0xFF46 => self.dma.read(),
@@ -138,17 +138,10 @@ impl MemoryBus {
         }
     }
 
-    pub fn get_interrupt_flags(&self) -> u8 {
-        self.interrupt_flag
-    }
-
-    pub fn get_interrupt_enable(&self) -> u8 {
-        self.interrupt_enable
-    }
-
     pub fn request_interrupt(&mut self, interrupt: InterruptBit) {
         self.interrupt_flag |= interrupt as u8;
     }
+
     /// Writes a byte of `value` to the `address`.
     pub fn write_byte(&mut self, address: u16, value: u8) {
         let address_usize = address as usize;
@@ -184,7 +177,7 @@ impl MemoryBus {
                 0xFF01 => self.serial.write_sb(value),
                 0xFF02 => self.serial.write_sc(value),
                 0xFF04..=0xFF07 => self.timer.write(address, value, &mut self.interrupt_flag),
-                0xFF0F => self.interrupt_flag = value & 0x1F, // Only lower 5 bits writable
+                0xFF0F => self.interrupt_flag = value & 0x1F,
                 0xFF10..=0xFF3F => self.apu.write(address, value),
                 0xFF40 => {
                     let lcdc = self.ppu.read_register(address);
@@ -263,7 +256,7 @@ impl MemoryBus {
                 _ => {}
             },
             0xFF80..=0xFFFE => self.hram[address_usize - 0xFF80] = value,
-            0xFFFF => self.interrupt_enable = value & 0x1F, // Only lower 5 bits writable
+            0xFFFF => self.interrupt_enable = value,
         };
     }
 
@@ -271,10 +264,19 @@ impl MemoryBus {
         let previous_mode = self.ppu.mode;
 
         self.dma_tick();
-        self.timer.tick(&mut self.interrupt_flag);
+
+        if self.timer.tick() {
+            self.request_interrupt(InterruptBit::Timer);
+        }
+
         self.ppu.tick(&mut self.interrupt_flag);
         self.apu.tick();
 
+        if self.serial.tick() {
+            self.request_interrupt(InterruptBit::Serial);
+        }
+
+        // Trigger HBlank DMA if we just entered HBlank
         if previous_mode != PPUMode::HBlank && self.ppu.mode == PPUMode::HBlank {
             self.hdma_hblank_transfer();
         }

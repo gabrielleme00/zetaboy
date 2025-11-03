@@ -55,7 +55,7 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | oam_dma/reg_read                 | ✅ |          |
 | oam_dma/sources-GS               | ⚠️ | GBS Only |
 | ppu/hblank_ly_scx_timing-GS      | ⚠️ | GBS Only |
-| ppu/intr_1_2_timing-GS           | ⚠️ | GBS Only |
+| ppu/intr_1_2_timing-GS           | ✅ | GBS Only |
 | ppu/intr_2_0_timing              | ✅ |          |
 | ppu/intr_2_mode0_timing_sprites  | ❌ |          |
 | ppu/intr_2_mode0_timing          | ❌ |          |
@@ -97,15 +97,15 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | call_cc_timing                   | ✅ |          |
 | call_timing2                     | ✅ |          |
 | call_timing                      | ✅ |          |
-| di_timing-GS                     | ⚠️ |          |
+| di_timing-GS                     | ✅ |          |
 | div_timing                       | ✅ |          |
 | ei_sequence                      | ✅ |          |
 | ei_timing                        | ✅ |          |
 | halt_ime0_ei                     | ✅ |          |
 | halt_ime0_nointr_timing          | ✅ |          |
-| halt_ime1_timing2-GS             | ⚠️ |          |
+| halt_ime1_timing2-GS             | ✅ |          |
 | halt_ime1_timing                 | ✅ |          |
-| if_ie_registers                  | ❌ |          |
+| if_ie_registers                  | ✅ |          |
 | intr_timing                      | ✅ |          |
 | jp_cc_timing                     | ✅ |          |
 | jp_timing                        | ✅ |          |
@@ -126,4 +126,5 @@ Can be found at https://github.com/retrio/gb-test-roms/
 
 | Test ROM  |    | Note |
 |-----------|----| ---- |
-| DMG-ACID2 | ✅ | PPU  |
+| DMG-ACID2 | ❌ | PPU  |
+| CGB-ACID2 | ❌ | PPU  |

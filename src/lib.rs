@@ -9,7 +9,6 @@ use audio::AudioManager;
 use emulator::Emulator;
 use gui::EmulatorApp;
 
-pub const PRINT_SERIAL: bool = false; // Print serial output
 pub const PRINT_STATE: bool = false; // Print CPU state after each instruction
 pub const PRINT_CART_INFO: bool = false; // Prints cartridge information
 

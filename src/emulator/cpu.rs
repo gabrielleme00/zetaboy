@@ -32,6 +32,7 @@ pub struct CPU {
 impl CPU {
     pub fn new(cart: Cart, force_dmg: bool) -> Self {
         let is_cgb = cart.is_cgb() && !force_dmg;
+        println!("Initializing CPU in {} mode", if is_cgb { "CGB" } else { "DMG" });
         Self {
             reg: Registers::new_with_mode(is_cgb),
             bus: MemoryBus::new(cart, force_dmg),
@@ -140,8 +141,8 @@ impl CPU {
 
     /// Returns the currently pending interrupts (IF & IE).
     fn get_pending_interrupts(&self) -> u8 {
-        let int_f = self.bus.get_interrupt_flags();
-        let int_e = self.bus.get_interrupt_enable();
+        let int_f = self.bus.read_byte(0xFF0F);
+        let int_e = self.bus.read_byte(0xFFFF);
         int_f & int_e
     }
 
