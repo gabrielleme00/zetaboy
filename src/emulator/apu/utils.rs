@@ -9,6 +9,7 @@ pub mod panning_indexes {
     pub const CH1_PAN_R: u8 = 0;
 }
 
+/// Get the panned output for a channel based on sound panning settings
 pub fn get_panned_output(sound_panning: u8, panning_bit_index: u8, output: f32) -> f32 {
     if sound_panning & (1 << panning_bit_index) != 0 {
         output
@@ -17,18 +18,21 @@ pub fn get_panned_output(sound_panning: u8, panning_bit_index: u8, output: f32) 
     }
 }
 
+/// Mix the outputs of the four channels
 pub fn mix_samples(ch1: f32, ch2: f32, ch3: f32, ch4: f32) -> f32 {
     let sum = ch1 + ch2 + ch3 + ch4;
     (sum / 4.0).clamp(-1.0, 1.0)
 }
 
+/// Apply master volume reduction to the mixed sample
 pub fn apply_volume_reduction(sample: f32, master_volume: u8) -> f32 {
     let volume_reduction = (master_volume as f32 + 1.0) / 8.0;
     (sample * volume_reduction).clamp(-1.0, 1.0)
 }
 
+/// Convert DAC input value (0.0 to 15.0) to normalized output (-1.0 to 1.0)
 pub fn as_dac_output(dac_input: f32) -> f32 {
-    (dac_input / 7.5) - 1.0
+    (dac_input * 2.0 / 15.0) - 1.0
 }
 
 /// Simple first-order single-pole IIR low-pass filter

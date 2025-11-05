@@ -3,8 +3,8 @@ mod instructions;
 pub mod memory_bus;
 mod registers;
 
-use crate::emulator::cart::Cart;
 use crate::PRINT_STATE;
+use crate::emulator::cart::Cart;
 use instructions::*;
 use memory_bus::*;
 use registers::*;
@@ -32,7 +32,12 @@ pub struct CPU {
 impl CPU {
     pub fn new(cart: Cart, force_dmg: bool) -> Self {
         let is_cgb = cart.is_cgb() && !force_dmg;
-        println!("Initializing CPU in {} mode", if is_cgb { "CGB" } else { "DMG" });
+
+        println!(
+            "Initializing CPU in {} mode",
+            if is_cgb { "CGB" } else { "DMG" }
+        );
+
         Self {
             reg: Registers::new_with_mode(is_cgb),
             bus: MemoryBus::new(cart, force_dmg),
@@ -141,9 +146,7 @@ impl CPU {
 
     /// Returns the currently pending interrupts (IF & IE).
     fn get_pending_interrupts(&self) -> u8 {
-        let int_f = self.bus.read_byte(0xFF0F);
-        let int_e = self.bus.read_byte(0xFFFF);
-        int_f & int_e
+        self.bus.read_byte(0xFF0F) & self.bus.read_byte(0xFFFF)
     }
 
     fn execute_interrupts(&mut self, pending: u8) {

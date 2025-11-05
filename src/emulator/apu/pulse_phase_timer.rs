@@ -16,13 +16,18 @@ impl PulsePhaseTimer {
         }
     }
 
-    pub fn tick(&mut self) {
-        self.counter -= 1;
+    /// Advance the timer by one tick.
+    /// Returns true if a phase step occurred.
+    pub fn tick(&mut self) -> bool {
         if self.counter == 0 {
             // Reload counter and move one step in the waveform
             self.update_counter();
             self.phase = (self.phase + 1) % 8;
+            return true;
         }
+        
+        self.counter -= 1;
+        false
     }
 
     pub fn trigger(&mut self) {
@@ -30,7 +35,7 @@ impl PulsePhaseTimer {
     }
 
     fn update_counter(&mut self) {
-        self.counter = 4 * (2048 - self.frequency);
+        self.counter = (self.frequency ^ 0x7FF) * 2 + 1;
     }
 
     pub fn get_phase(&self) -> u8 {

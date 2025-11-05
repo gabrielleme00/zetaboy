@@ -15,6 +15,8 @@ pub struct PulseChannel {
     duty_cycle: DutyCycle,
     length_counter: LengthCounter,
     envelope: Envelope,
+    sample_surpressed: bool,
+    just_reloaded: bool,
 }
 
 impl PulseChannel {
@@ -27,6 +29,8 @@ impl PulseChannel {
             duty_cycle: DutyCycle::default(),
             length_counter: LengthCounter::new(),
             envelope: Envelope::default(),
+            sample_surpressed: false,
+            just_reloaded: false,
         }
     }
 
@@ -39,17 +43,27 @@ impl PulseChannel {
             duty_cycle: DutyCycle::default(),
             length_counter: LengthCounter::new(),
             envelope: Envelope::default(),
+            sample_surpressed: false,
+            just_reloaded: false,
         }
     }
 
     pub fn tick(&mut self) {
-        self.timer.tick();
+        if self.timer.tick() {
+            // After a phase step, clear the flags
+            self.just_reloaded = false;
+            self.sample_surpressed = false;
+        }
     }
 
     pub fn clock_sweep(&mut self) {
         if let Some(ref mut sweep) = self.sweep {
             if let Some(new_frequency) = sweep.clock() {
                 self.timer.set_frequency(new_frequency);
+            }
+            // Only disable the channel if overflow occurred during sweep
+            if sweep.should_disable_channel() {
+                self.channel_enabled = false;
             }
         }
     }
@@ -64,14 +78,18 @@ impl PulseChannel {
 
     fn digital_output(&self) -> f32 {
         if !self.channel_enabled || !self.dac_enabled {
-            return 7.5;
+            return 0.0; // DAC disabled = 0 output
+        }
+
+        // Suppress output for the first sample after trigger
+        if self.sample_surpressed {
+            return 0.0;
         }
 
         let waveform_step = self.duty_cycle.waveform_step(self.timer.get_phase());
         let volume = self.envelope.volume;
 
-        let output = waveform_step * volume;
-        output as f32
+        (waveform_step * volume) as f32
     }
 
     pub fn analog_output(&self) -> f32 {
@@ -79,20 +97,34 @@ impl PulseChannel {
     }
 
     fn trigger(&mut self) {
+        let was_active = self.channel_enabled;
+        
+        // Enable the channel if DAC is enabled
         if self.dac_enabled {
             self.channel_enabled = true;
         }
 
+        // Reload timer
         self.timer.trigger();
+        self.just_reloaded = true;
+        
+        // Only suppress the first sample if channel was not previously active
+        self.sample_surpressed = !was_active && self.channel_enabled;
 
+        // Reload length counter if it's 0
         if self.length_counter.get() == 0 {
             self.length_counter.trigger();
         }
 
+        // Reload envelope
         self.envelope.trigger();
 
+        // Handle sweep for channel 1
         if let Some(ref mut sweep) = self.sweep {
-            sweep.trigger(self.timer.get_frequency());
+            if sweep.trigger(self.timer.get_frequency()) {
+                // Sweep overflow disables the channel
+                self.channel_enabled = false;
+            }
         }
     }
 
@@ -128,13 +160,7 @@ impl PulseChannel {
     pub fn set_length_settings(&mut self, value: u8) {
         self.duty_cycle = DutyCycle::from_bits(value >> 6);
         let length_load = value & 0x3F;
-
-        // If length is 0, set it to maximum (64)
-        if length_load == 0 {
-            self.length_counter.load(64);
-        } else {
-            self.length_counter.load(length_load);
-        }
+        self.length_counter.load(length_load);
     }
 
     pub fn get_envelope_settings(&self) -> u8 {
@@ -154,6 +180,7 @@ impl PulseChannel {
             EnvelopeDirection::Decreasing
         };
         self.envelope.configured_period = value & 0x07;
+        
         self.dac_enabled = (value & 0xF8) != 0;
 
         if !self.dac_enabled {
@@ -175,10 +202,10 @@ impl PulseChannel {
     }
 
     pub fn set_period_high_control_settings(&mut self, value: u8) {
+        self.timer.set_frequency_msb(value);
+        self.length_counter.enabled = (value & BIT_6) != 0;
         if value & BIT_7 != 0 {
             self.trigger();
         }
-        self.length_counter.enabled = (value & BIT_6) != 0;
-        self.timer.set_frequency_msb(value);
     }
 }

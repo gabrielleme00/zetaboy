@@ -23,13 +23,16 @@ impl Envelope {
     pub fn clock(&mut self) {
         use EnvelopeDirection::*;
 
-        if self.period == 0 {
+        if self.configured_period == 0 {
             return;
         }
 
-        self.counter -= 1;
+        if self.counter > 0 {
+            self.counter -= 1;
+        }
+
         if self.counter == 0 {
-            self.counter = self.period;
+            self.counter = if self.period == 0 { 8 } else { self.period };
 
             match (self.direction, self.volume) {
                 (Decreasing, 0) | (Increasing, 15) => {}
@@ -43,6 +46,6 @@ impl Envelope {
         self.volume = self.starting_volume;
         self.direction = self.configured_direction;
         self.period = self.configured_period;
-        self.counter = self.period;
+        self.counter = if self.period == 0 { 8 } else { self.period };
     }
 }

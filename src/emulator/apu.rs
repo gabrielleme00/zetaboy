@@ -29,6 +29,7 @@ pub struct Apu {
     channel_3: WaveChannel,
     channel_4: NoiseChannel,
     last_sample: (f32, f32),
+    tick_divider: bool,
 }
 
 impl Apu {
@@ -44,6 +45,7 @@ impl Apu {
             channel_3: WaveChannel::new(),
             channel_4: NoiseChannel::new(),
             last_sample: (0.0, 0.0),
+            tick_divider: false,
         };
         
         apu.write(0xFF10, 0x80);
@@ -183,6 +185,13 @@ impl Apu {
     }
 
     pub fn tick(&mut self) {
+        // APU runs at 2MHz, but it's called at 4MHz (every T-cycle)
+        // So we only actually tick the APU every other call
+        self.tick_divider = !self.tick_divider;
+        if !self.tick_divider {
+            return;
+        }
+
         if !self.enabled {
             return;
         }
@@ -192,7 +201,7 @@ impl Apu {
         self.channel_3.tick();
         self.channel_4.tick();
 
-        // Clock frame sequencer at 512 Hz (every 2048 T-cycles)
+        // Clock frame sequencer at 512 Hz (every 2048 APU ticks = 4096 T-cycles)
         self.frame_sequencer_counter += 1;
         if self.frame_sequencer_counter >= 2048 {
             self.frame_sequencer_counter = 0;
