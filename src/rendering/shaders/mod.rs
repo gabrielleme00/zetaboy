@@ -1,6 +1,8 @@
+mod lcd_shader;
+
 use crate::rendering::GlContext;
-use crate::shaders::lcd_shader::{LCD_FRAGMENT_SHADER, LCD_VERTEX_SHADER};
 use eframe::egui_glow::glow;
+use lcd_shader::{LCD_FRAGMENT_SHADER, LCD_VERTEX_SHADER};
 
 pub fn init_gl_context(gl: &glow::Context) -> Result<GlContext, String> {
     use eframe::egui_glow::glow::HasContext;

@@ -1,5 +1,5 @@
 mod renderer;
-mod shader;
+mod shaders;
 
 pub use renderer::{GlContext, render_with_shader};
-pub use shader::init_gl_context;
+pub use shaders::init_gl_context;

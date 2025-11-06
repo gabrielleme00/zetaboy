@@ -2,7 +2,6 @@ mod audio;
 mod emulator;
 mod gui;
 mod rendering;
-mod shaders;
 mod utils;
 
 use std::error::Error;
