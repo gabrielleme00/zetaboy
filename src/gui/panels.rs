@@ -48,9 +48,9 @@ pub fn render_controls_panel(ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label("Controls:");
             ui.separator();
-            ui.label("Arrow Keys: D-Pad");
+            ui.label("WASD: D-Pad");
             ui.separator();
-            ui.label("S/A: A/B Buttons");
+            ui.label("J/K: A/B Buttons");
             ui.separator();
             ui.label("Enter: Start");
             ui.separator();

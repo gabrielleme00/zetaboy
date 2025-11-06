@@ -10,12 +10,12 @@ pub fn handle_keyboard_input(
     if let Some(emulator) = emulator {
         ctx.input(|i| {
             // Gameboy controls
-            emulator.input_state.a = i.key_down(egui::Key::S);
-            emulator.input_state.b = i.key_down(egui::Key::A);
-            emulator.input_state.up = i.key_down(egui::Key::ArrowUp);
-            emulator.input_state.down = i.key_down(egui::Key::ArrowDown);
-            emulator.input_state.left = i.key_down(egui::Key::ArrowLeft);
-            emulator.input_state.right = i.key_down(egui::Key::ArrowRight);
+            emulator.input_state.a = i.key_down(egui::Key::J);
+            emulator.input_state.b = i.key_down(egui::Key::K);
+            emulator.input_state.up = i.key_down(egui::Key::W);
+            emulator.input_state.down = i.key_down(egui::Key::S);
+            emulator.input_state.left = i.key_down(egui::Key::A);
+            emulator.input_state.right = i.key_down(egui::Key::D);
             emulator.input_state.start = i.key_down(egui::Key::Enter);
             emulator.input_state.select = i.key_down(egui::Key::Space);
 

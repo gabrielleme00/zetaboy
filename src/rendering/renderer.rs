@@ -47,6 +47,11 @@ pub fn render_with_shader(gl: &glow::Context, ctx: &GlContext, image_buffer: &[u
             gl.uniform_1_i32(Some(&location), 0);
         }
 
+        // Set resolution uniform
+        if let Some(location) = gl.get_uniform_location(ctx.program, "u_resolution") {
+            gl.uniform_2_f32(Some(&location), WIDTH as f32, HEIGHT as f32);
+        }
+
         // Draw the quad
         gl.bind_vertex_array(Some(ctx.vao));
         gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);

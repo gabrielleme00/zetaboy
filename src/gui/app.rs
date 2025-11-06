@@ -75,12 +75,14 @@ impl EmulatorApp {
             let image_buffer = emulator.cpu.bus.ppu.buffer.clone();
 
             let available_size = ui.available_size();
-            let aspect_ratio = WIDTH as f32 / HEIGHT as f32;
-            let display_size = if available_size.x / available_size.y > aspect_ratio {
-                egui::vec2(available_size.y * aspect_ratio, available_size.y)
-            } else {
-                egui::vec2(available_size.x, available_size.x / aspect_ratio)
-            };
+            let scale_x = (available_size.x / WIDTH as f32).floor().max(1.0);
+            let scale_y = (available_size.y / HEIGHT as f32).floor().max(1.0);
+            let scale = scale_x.min(scale_y); // Use the smaller scale to fit in both dimensions
+            
+            let display_size = egui::vec2(
+                WIDTH as f32 * scale,
+                HEIGHT as f32 * scale,
+            );
 
             // Center the allocated space
             ui.centered_and_justified(|ui| {
