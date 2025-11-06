@@ -94,6 +94,12 @@ impl Apu {
         self.last_sample
     }
 
+    pub fn sample_mono(&mut self) -> (f32, f32) {
+        let (left, right) = self.sample_stereo();
+        let mono = (left + right) / 2.0;
+        (mono, mono)
+    }
+
     fn generate_left_sample(
         &self,
         ch1_dac_out: f32,

@@ -427,7 +427,7 @@ impl PPU {
         // IF BG is disabled, fill with 0th color
         if !lcdc_data.bg_enable {
             for x in 0..WIDTH {
-                self.buffer[self.ly as usize * WIDTH + x] = self.get_output_color(0);
+                self.buffer[self.ly as usize * WIDTH + x] = self.get_dmg_color(self.bgp, 0);
             }
             return;
         }
@@ -511,8 +511,7 @@ impl PPU {
             let out_color = if self.cgb_mode {
                 self.get_cgb_color(palette_num, color_index, false)
             } else {
-                let dmg_color = self.get_dmg_color(self.bgp, color_index);
-                self.get_output_color(dmg_color)
+                self.get_dmg_color(self.bgp, color_index)
             };
 
             let buffer_index = self.ly as usize * WIDTH + x;
@@ -626,8 +625,7 @@ impl PPU {
                     self.get_cgb_color(sprite.cgb_palette, color_index, true)
                 } else {
                     let obp = if sprite.palette_index { self.obp1 } else { self.obp0 };
-                    let dmg_color = self.get_dmg_color(obp, color_index);
-                    self.get_output_color(dmg_color)
+                    self.get_dmg_color(obp, color_index)
                 };
 
                 if sprite.bg_priority {
@@ -643,8 +641,11 @@ impl PPU {
         }
     }
 
-    fn get_dmg_color(&self, palette: u8, color_index: u8) -> u8 {
-        (palette >> (color_index * 2)) & 0b11
+    fn get_dmg_color(&self, obp: u8, color_index: u8) -> u32 {
+        let color = (obp >> (color_index * 2)) & 0b11;
+        // let palette = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000];
+        let palette = [0xFF9A9E3F, 0xFF496B22, 0xFF0E450B, 0xFF1B2A09];
+        palette[color as usize]
     }
 
     /// Get CGB color from palette data (RGB555 format)
@@ -675,13 +676,6 @@ impl PPU {
         
         // Return as 0xAARRGGBB
         0xFF000000 | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
-    }
-
-    /// Returns the output color value (for framebuffer) for a given color value (0 - 3).
-    fn get_output_color(&self, dmg_color: u8) -> u32 {
-        // let palette = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000];
-        let palette = [0xFF9A9E3F, 0xFF496B22, 0xFF0E450B, 0xFF1B2A09];
-        palette[dmg_color as usize]
     }
 }
 

@@ -1,6 +1,8 @@
 mod audio;
 mod emulator;
 mod gui;
+mod rendering;
+mod shaders;
 mod utils;
 
 use std::error::Error;
@@ -15,7 +17,9 @@ pub const PRINT_CART_INFO: bool = false; // Prints cartridge information
 pub fn run(rom_path: Option<&str>) -> Result<(), Box<dyn Error>> {
     let (_audio_manager, audio_sender) = AudioManager::new()?;
 
-    let emulator = rom_path.map(|path| Emulator::new(path, false)).transpose()?;
+    let emulator = rom_path
+        .map(|path| Emulator::new(path, false))
+        .transpose()?;
     let app = EmulatorApp::new(emulator, Some(audio_sender));
 
     let options = eframe::NativeOptions {
