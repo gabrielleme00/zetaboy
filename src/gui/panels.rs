@@ -1,3 +1,5 @@
+use egui::RichText;
+
 use crate::emulator::Emulator;
 
 pub fn render_debug_panel(ctx: &egui::Context, emulator: &Option<Emulator>) {
@@ -46,7 +48,7 @@ pub fn render_debug_panel(ctx: &egui::Context, emulator: &Option<Emulator>) {
 pub fn render_controls_panel(ctx: &egui::Context) {
     egui::TopBottomPanel::bottom("controls").show(ctx, |ui| {
         ui.horizontal(|ui| {
-            ui.label("Controls:");
+            ui.label(RichText::new("Controls").strong());
             ui.separator();
             ui.label("WASD: D-Pad");
             ui.separator();

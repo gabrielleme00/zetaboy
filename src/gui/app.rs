@@ -22,6 +22,7 @@ pub struct EmulatorApp {
     pub paused: bool,
     pub force_dmg: bool,
     pub audio_mono: bool,
+    pub audio_volume: f32,
     gl_context: Option<GlContext>,
 }
 
@@ -34,6 +35,7 @@ impl EmulatorApp {
             paused: false,
             force_dmg: false,
             audio_mono: false,
+            audio_volume: 0.5,
             gl_context: None,
         }
     }
@@ -56,12 +58,14 @@ impl EmulatorApp {
                     // Process audio
                     if let Some(audio_sender) = &mut self.audio_sender {
                         let audio_mono = self.audio_mono;
+                        let audio_volume = self.audio_volume;
                         audio_sender.process_cpu_cycles(t_cycles_taken as u32, || {
-                            if audio_mono {
+                            let (left, right) = if audio_mono {
                                 emulator.cpu.bus.apu.sample_mono()
                             } else {
                                 emulator.cpu.bus.apu.sample_stereo()
-                            }
+                            };
+                            (left * audio_volume, right * audio_volume)
                         });
                     }
                 }
@@ -147,6 +151,7 @@ impl eframe::App for EmulatorApp {
                 &mut self.force_dmg,
                 &mut self.show_debug,
                 &mut self.audio_mono,
+                &mut self.audio_volume,
             );
         });
 

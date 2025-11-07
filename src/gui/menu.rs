@@ -1,3 +1,5 @@
+use egui::RichText;
+
 use crate::emulator::Emulator;
 use std::time::Instant;
 
@@ -9,10 +11,12 @@ pub fn render_menu_bar(
     force_dmg: &mut bool,
     show_debug: &mut bool,
     audio_mono: &mut bool,
+    audio_volume: &mut f32,
 ) {
     egui::MenuBar::new().ui(ui, |ui| {
         render_file_menu(ui, ctx, emulator, paused);
-        render_emulation_menu(ui, emulator, paused, force_dmg, audio_mono);
+        render_emulation_menu(ui, emulator, paused, force_dmg);
+        render_audio_menu(ui, audio_mono, audio_volume);
         render_debug_menu(ui, show_debug);
 
         ui.separator();
@@ -87,7 +91,6 @@ fn render_emulation_menu(
     emulator: &mut Option<Emulator>,
     paused: &mut bool,
     force_dmg: &mut bool,
-    audio_mono: &mut bool,
 ) {
     ui.menu_button("Emulation", |ui| {
         if ui
@@ -127,8 +130,23 @@ fn render_emulation_menu(
                 }
             }
         }
-        ui.separator();
-        ui.checkbox(audio_mono, "Mono Audio");
+    });
+}
+
+fn render_audio_menu(
+    ui: &mut egui::Ui,
+    audio_mono: &mut bool,
+    audio_volume: &mut f32,
+) {
+    ui.menu_button("Audio", |ui| {
+        ui.label("Volume:");
+        let volume_percent = (*audio_volume * 100.0) as u8;
+        ui.add(
+            egui::Slider::new(audio_volume, 0.0..=1.0)
+                .text(format!("{}%", volume_percent))
+                .show_value(false),
+        );
+        ui.checkbox(audio_mono, "Mono");
     });
 }
 
