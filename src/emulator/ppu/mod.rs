@@ -311,6 +311,10 @@ impl PPU {
         (self.vram[self.vram_bank][index], self.vram[self.vram_bank][index + 1])
     }
 
+    pub fn is_lcd_enabled(&self) -> bool {
+        (self.lcdc & BIT_7) != 0
+    }
+
     pub fn tick(&mut self, interrupt_flag: &mut u8) {
         let lcdc_data = LcdcData::from(self.lcdc);
 

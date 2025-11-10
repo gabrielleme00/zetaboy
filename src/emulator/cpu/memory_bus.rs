@@ -74,15 +74,12 @@ impl MemoryBus {
             0x0000..=0x7FFF => self.cart.read_rom(address),
             0x8000..=0x9FFF => self.ppu.read_vram(address),
             0xA000..=0xBFFF => self.cart.read_ram(address),
-            0xC000..=0xCFFF => self.wram[address_usize - 0xC000],
-            0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank],
-            0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM mirror
-            0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank],
+            0xC000..=0xCFFF => self.wram[address_usize - 0xC000], // WRAM bank 0
+            0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank], // WRAM bank n
+            0xE000..=0xEFFF => self.wram[address_usize - 0xE000], // WRAM bank 0 mirror
+            0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank], // WRAM bank n mirror
             0xFE00..=0xFE9F => {
-                let lcdc = self.ppu.read_register(0xFF40);
-                let lcd_enabled = (lcdc & BIT_7) != 0;
-
-                if !lcd_enabled {
+                if !self.ppu.is_lcd_enabled() {
                     // When LCD is disabled, OAM is always accessible
                     self.ppu.read_oam(address)
                 } else if self.dma.is_oam_blocked() {
@@ -94,7 +91,7 @@ impl MemoryBus {
                     value
                 }
             }
-            0xFEA0..=0xFEFF => 0x00,
+            0xFEA0..=0xFEFF => 0x00, // Unused OAM area
             0xFF00..=0xFF7F => match address {
                 0xFF00 => self.joypad.read_p1(),
                 0xFF01 => self.serial.read_sb(),
@@ -106,11 +103,7 @@ impl MemoryBus {
                 0xFF46 => self.dma.read(),
                 0xFF47..=0xFF4B => self.ppu.read_register(address),
                 0xFF4F => self.ppu.read_vram_bank(),
-                0xFF51 => self.hdma.read_source_high(), // HDMA1
-                0xFF52 => self.hdma.read_source_low(),  // HDMA2
-                0xFF53 => self.hdma.read_dest_high(),   // HDMA3
-                0xFF54 => self.hdma.read_dest_low(),    // HDMA4
-                0xFF55 => self.hdma.read_mode_length(), // HDMA5
+                0xFF51..=0xFF55 => self.hdma.read(address),
                 0xFF4D => {
                     if self.ppu.cgb_mode {
                         self.key1 | 0x7E // Bits 1-6 are always 1, bit 7 is current speed
@@ -147,15 +140,12 @@ impl MemoryBus {
             0x0000..=0x7FFF => self.cart.write_rom(address, value),
             0x8000..=0x9FFF => self.ppu.write_vram(address, value),
             0xA000..=0xBFFF => self.cart.write_ram(address, value),
-            0xC000..=0xCFFF => self.wram[address_usize - 0xC000] = value,
-            0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank] = value,
-            0xE000..=0xEFFF => self.wram[address_usize - 0xE000] = value, // WRAM mirror
-            0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank] = value,
+            0xC000..=0xCFFF => self.wram[address_usize - 0xC000] = value, // WRAM bank 0
+            0xD000..=0xDFFF => self.wram[address_usize - 0xD000 + 0x1000 * self.wram_bank] = value, // WRAM bank n
+            0xE000..=0xEFFF => self.wram[address_usize - 0xE000] = value, // WRAM bank 0 mirror
+            0xF000..=0xFDFF => self.wram[address_usize - 0xF000 + 0x1000 * self.wram_bank] = value, // WRAM bank n mirror
             0xFE00..=0xFE9F => {
-                let lcdc = self.ppu.read_register(0xFF40);
-                let lcd_enabled = (lcdc & BIT_7) != 0;
-
-                if !lcd_enabled {
+                if !self.ppu.is_lcd_enabled() {
                     // When LCD is disabled, OAM is always accessible
                     self.ppu.write_oam(address, value);
                 } else if self.ppu.can_use_oam() && !self.dma.is_oam_blocked() {
@@ -193,12 +183,10 @@ impl MemoryBus {
                 0xFF41 => {
                     // Undocumented GameBoy bug, needed by Road Rash
                     // http://www.devrs.com/gb/files/faqs.html#GBBugs
-                    if self.ppu.mode == PPUMode::VBlank || self.ppu.mode == PPUMode::HBlank {
-                        let lcdc = self.ppu.read_register(0xFF40);
-                        let lcd_enabled = lcdc & BIT_7 != 0;
-                        if lcd_enabled {
-                            self.request_interrupt(InterruptBit::LCDStat);
-                        }
+                    if self.ppu.is_lcd_enabled()
+                        && (self.ppu.mode == PPUMode::VBlank || self.ppu.mode == PPUMode::HBlank)
+                    {
+                        self.request_interrupt(InterruptBit::LCDStat);
                     }
                     self.ppu.write_register(address, value);
                 }
@@ -221,13 +209,8 @@ impl MemoryBus {
                     }
                 }
                 0xFF4F => self.ppu.write_vram_bank(value),
-                0xFF51 => self.hdma.write_source_high(value), // HDMA1
-                0xFF52 => self.hdma.write_source_low(value),  // HDMA2
-                0xFF53 => self.hdma.write_dest_high(value),   // HDMA3
-                0xFF54 => self.hdma.write_dest_low(value),    // HDMA4
-                0xFF55 => {
-                    // HDMA5
-                    self.hdma.write_mode_length(value);
+                0xFF51..=0xFF55 => {
+                    self.hdma.write(address, value);
                     // If General Purpose DMA (bit 7 = 0), transfer immediately
                     if !self.hdma.is_h_blank_mode() {
                         self.perform_gdma();
@@ -274,11 +257,26 @@ impl MemoryBus {
         }
     }
 
+    /// Advances the OAM DMA transfer if active
     pub fn dma_tick(&mut self) {
         if let Some((source, destination)) = self.dma.tick() {
             // Perform the DMA transfer
             let value = self.read_byte(source);
             self.ppu.write_oam(destination, value);
+        }
+    }
+
+    /// Read a byte for HDMA transfer (avoids full read_byte overhead)
+    fn read_for_hdma(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x7FFF => self.cart.read_rom(address),
+            0xA000..=0xBFFF => self.cart.read_ram(address),
+            0xC000..=0xCFFF => self.wram[(address - 0xC000) as usize],
+            0xD000..=0xDFFF => {
+                let addr = (address - 0xD000) as usize;
+                self.wram[addr + 0x1000 * self.wram_bank]
+            }
+            _ => 0xFF,
         }
     }
 
@@ -288,16 +286,7 @@ impl MemoryBus {
             if let Some((source, dest)) = self.hdma.transfer_block() {
                 // Transfer 16 bytes
                 for i in 0..16 {
-                    let value = match source.wrapping_add(i) {
-                        0x0000..=0x7FFF => self.cart.read_rom(source.wrapping_add(i)),
-                        0xA000..=0xBFFF => self.cart.read_ram(source.wrapping_add(i)),
-                        0xC000..=0xCFFF => self.wram[(source.wrapping_add(i) - 0xC000) as usize],
-                        0xD000..=0xDFFF => {
-                            let addr = (source.wrapping_add(i) - 0xD000) as usize;
-                            self.wram[addr + 0x1000 * self.wram_bank]
-                        }
-                        _ => 0xFF,
-                    };
+                    let value = self.read_for_hdma(source.wrapping_add(i));
                     self.ppu.write_vram(dest.wrapping_add(i), value);
                 }
             }
@@ -313,16 +302,7 @@ impl MemoryBus {
         if let Some((source, dest)) = self.hdma.transfer_block() {
             // Transfer 16 bytes
             for i in 0..16 {
-                let value = match source.wrapping_add(i) {
-                    0x0000..=0x7FFF => self.cart.read_rom(source.wrapping_add(i)),
-                    0xA000..=0xBFFF => self.cart.read_ram(source.wrapping_add(i)),
-                    0xC000..=0xCFFF => self.wram[(source.wrapping_add(i) - 0xC000) as usize],
-                    0xD000..=0xDFFF => {
-                        let addr = (source.wrapping_add(i) - 0xD000) as usize;
-                        self.wram[addr + 0x1000 * self.wram_bank]
-                    }
-                    _ => 0xFF,
-                };
+                let value = self.read_for_hdma(source.wrapping_add(i));
                 self.ppu.write_vram(dest.wrapping_add(i), value);
             }
         }
