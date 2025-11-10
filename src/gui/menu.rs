@@ -1,5 +1,3 @@
-use egui::RichText;
-
 use crate::emulator::Emulator;
 use std::time::Instant;
 
@@ -47,8 +45,8 @@ fn render_file_menu(
             *paused = true;
 
             let file = rfd::FileDialog::new()
-                .add_filter("Gameboy ROM", &["gb", "gbc"])
-                .set_directory("/")
+                .add_filter("Game Boy (Color) ROM", &["gb", "gbc"])
+                .set_title("ZetaBoy - Open Game Boy (Color) ROM")
                 .pick_file();
 
             if let Some(path) = file {
