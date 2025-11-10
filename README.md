@@ -111,7 +111,7 @@ Can be found at https://github.com/retrio/gb-test-roms/
 | jp_timing                        | ✅ |          |
 | ld_hl_sp_e_timing                | ✅ |          |
 | oam_dma_restart                  | ✅ |          |
-| oam_dma_start                    | ❌ |          |
+| oam_dma_start                    | ✅ |          |
 | oam_dma_timing                   | ✅ |          |
 | pop_timing                       | ✅ |          |
 | push_timing                      | ✅ |          |

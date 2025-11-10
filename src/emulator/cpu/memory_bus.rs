@@ -85,14 +85,12 @@ impl MemoryBus {
                 if !lcd_enabled {
                     // When LCD is disabled, OAM is always accessible
                     self.ppu.read_oam(address)
-                } else if self.dma.is_enabled() {
+                } else if self.dma.is_oam_blocked() {
                     // During DMA with LCD on, cpu reads always return 0xFF
-                    println!("Ignored read from OAM at {:#06X} during DMA", address);
                     0xFF
                 } else {
                     // Normal OAM access
                     let value = self.ppu.read_oam(address);
-                    println!("Read {:#04X} from OAM at {:#06X}", value, address);
                     value
                 }
             }
@@ -160,15 +158,9 @@ impl MemoryBus {
                 if !lcd_enabled {
                     // When LCD is disabled, OAM is always accessible
                     self.ppu.write_oam(address, value);
-                } else if self.ppu.can_use_oam() && !self.dma.is_enabled() {
+                } else if self.ppu.can_use_oam() && !self.dma.is_oam_blocked() {
                     // LCD is on, normal OAM access (with restrictions)
                     self.ppu.write_oam(address, value);
-                    println!("Wrote {:#04X} to OAM at {:#06X}", value, address);
-                } else {
-                    println!(
-                        "Ignored write to OAM at {:#06X} while in mode {:?} or during DMA",
-                        address, self.ppu.mode
-                    );
                 }
             }
             0xFEA0..=0xFEFF => {} // Unused OAM area

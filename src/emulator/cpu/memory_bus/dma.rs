@@ -11,6 +11,7 @@ pub struct Dma {
     enabled: bool,
     delay: u8,
     last_value: u8,
+    oam_blocked: bool,
 }
 
 impl Dma {
@@ -21,11 +22,12 @@ impl Dma {
             enabled: false,
             delay: 0,
             last_value: 0xFF,
+            oam_blocked: false,
         }
     }
 
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
+    pub fn is_oam_blocked(&self) -> bool {
+        self.oam_blocked
     }
 
     pub fn read(&self) -> u8 {
@@ -36,8 +38,13 @@ impl Dma {
         self.last_value = source;
         self.source = (source as u16) << 8;
         self.copied = 0;
+        // If DMA was already running (and OAM was already blocked), keep it blocked
+        // Otherwise, OAM is not blocked yet for the initial 8 T-cycles
+        if !self.enabled {
+            self.oam_blocked = false;
+        }
         self.enabled = true;
-        self.delay = DELAY_T_CYCLES * 2; // Initial delay before first transfer
+        self.delay = DELAY_T_CYCLES * 2; // 8 T-cycles initial delay before first transfer
     }
 
     pub fn tick(&mut self) -> Option<(u16, u16)> {
@@ -47,11 +54,16 @@ impl Dma {
 
         if self.delay > 0 {
             self.delay -= 1;
+            // OAM becomes blocked at M=2 (when delay reaches 0, meaning 8 T-cycles have passed)
+            if self.delay == 0 {
+                self.oam_blocked = true;
+            }
         }
 
         if self.delay == 0 {
             if self.copied >= TRANSFER_SIZE {
                 self.enabled = false;
+                self.oam_blocked = false;
                 return None;
             }
 
