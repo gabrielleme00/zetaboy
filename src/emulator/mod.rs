@@ -151,8 +151,12 @@ impl Emulator {
         let file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path, e))?;
         let reader = BufReader::new(file);
 
-        let state: CPU = bincode::deserialize_from(reader)
+        let mut state: CPU = bincode::deserialize_from(reader)
             .map_err(|e| format!("Failed to deserialize {}: {}", path, e))?;
+
+        state.bus.cart.reload_rom(&self.rom_path)?;
+        state.bus.ppu.reinit_buffers();
+
         self.cpu = state;
 
         Ok(path.to_string())

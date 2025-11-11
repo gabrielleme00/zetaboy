@@ -39,6 +39,7 @@ pub enum PPUMode {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct PPU {
+    #[serde(skip)]
     pub buffer: Vec<u32>,
     vram: Vec<Vec<u8>>, // 2 banks of VRAM for CGB
     #[serde(with = "serde_arrays")]
@@ -46,6 +47,7 @@ pub struct PPU {
     pub mode: PPUMode,
     pub dot_counter: u16,
     window_line: u8,
+    #[serde(skip)]
     bg_color_indices: Vec<u8>,
     // CGB-specific fields
     pub cgb_mode: bool,
@@ -109,6 +111,16 @@ impl PPU {
         // Initialize CGB palettes with DMG-equivalent colors if enabling CGB mode
         if enabled {
             self.init_default_cgb_palettes();
+        }
+    }
+
+    /// Reinitialize transient buffers after deserialization (since they're skipped in save states)
+    pub fn reinit_buffers(&mut self) {
+        if self.buffer.is_empty() {
+            self.buffer = vec![0; WIDTH * HEIGHT];
+        }
+        if self.bg_color_indices.is_empty() {
+            self.bg_color_indices = vec![0; WIDTH * HEIGHT];
         }
     }
     

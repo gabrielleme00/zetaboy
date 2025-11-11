@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Cart {
+    #[serde(skip)]
     pub rom_data: Vec<u8>,
     header: Header,
     pub ram_data: Vec<u8>,
@@ -105,6 +106,12 @@ impl Cart {
 
     pub fn has_battery(&self) -> bool {
         MbcType::has_battery(self.header.cart_type)
+    }
+
+    /// Reload ROM data from a file (used after deserializing save states)
+    pub fn reload_rom<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn Error>> {
+        self.rom_data = fs::read(path)?;
+        Ok(())
     }
 
     pub fn is_cgb(&self) -> bool {
