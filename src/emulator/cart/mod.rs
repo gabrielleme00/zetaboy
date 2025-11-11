@@ -1,9 +1,9 @@
-mod mbc;
 mod licensee;
+mod mbc;
 
-use std::{error::Error, fs, path::Path};
 use mbc::MbcType;
 use serde::{Deserialize, Serialize};
+use std::{error::Error, fs, path::Path};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Cart {
@@ -71,11 +71,11 @@ impl Header {
     fn get_ram_banks_number(&self) -> usize {
         match self.ram_size {
             0 => 0,
-            1 => 0, // 2 kB (unused)
-            2 => 1, // 8 kB
-            3 => 4, // 32 kB
+            1 => 0,  // 2 kB (unused)
+            2 => 1,  // 8 kB
+            3 => 4,  // 32 kB
             4 => 16, // 128 kB
-            5 => 8, // 64 kB
+            5 => 8,  // 64 kB
             _ => {
                 println!("Unknown RAM size code: {:#04X}", self.ram_size);
                 0
@@ -86,15 +86,15 @@ impl Header {
 
 impl Cart {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
-        let rom_data = fs::read(path)?;
+        let rom_data = fs::read(&path)?;
         let header = Header::new(&rom_data);
 
         let ram_size = header.get_ram_size_in_bytes();
         let rom_banks = header.get_rom_banks_number();
         let ram_banks = header.get_ram_banks_number();
-        let mbc_type = MbcType::from_byte(header.cart_type, rom_banks, ram_banks);
+        let mbc_type = MbcType::from_byte(header.cart_type, rom_banks, ram_banks, path.as_ref());
 
-         // Load RTC data if applicable
+        // Load RTC data if applicable
 
         Ok(Self {
             rom_data,
