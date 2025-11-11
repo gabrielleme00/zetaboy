@@ -28,13 +28,13 @@ pub enum MbcType {
 }
 
 impl MbcType {
-    pub fn from_byte(byte: u8, rom_banks: usize, ram_banks: usize) -> Self {
+    pub fn from_byte(byte: u8, rom_banks: usize, ram_banks: usize, rom_path: &Path) -> Self {
         match byte {
             0x00 => MbcType::Mbc0(Mbc0 {}),
             0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(rom_banks)),
             0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(rom_banks)),
             0x0F | 0x10 | 0x11 | 0x12 | 0x13 => {
-                MbcType::Mbc3(Mbc3::new(rom_banks, ram_banks, Self::has_timer(byte)))
+                MbcType::Mbc3(Mbc3::new(rom_banks, ram_banks, Self::has_timer(byte), rom_path.to_path_buf()))
             }
             0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => MbcType::Mbc5(Mbc5::new(rom_banks, ram_banks)),
             _ => panic!("Unsupported MBC type: {:#X} - {}", byte, Self::name(byte)),

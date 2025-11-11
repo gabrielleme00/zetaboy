@@ -55,8 +55,10 @@ impl Mbc3 {
         rom_banks_number: usize,
         ram_banks_number: usize,
         rtc_enabled: bool,
+        rom_path: PathBuf,
     ) -> Self {
-        let rtc_path = PathBuf::from(format!("test.rtc"));
+        let mut rtc_path = rom_path;
+        rtc_path.set_extension("rtc");
         let loaded_rtc = load_rtc_state(rtc_path.as_path());
         Mbc3 {
             rom_bank: 1,
